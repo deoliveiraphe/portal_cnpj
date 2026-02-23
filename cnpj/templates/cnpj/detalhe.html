@@ -1,0 +1,452 @@
+{% extends "cnpj/base.html" %}
+{% load cnpj_extras %}
+{% block title %}CNPJ {{ cnpj_basico }} — Portal CNPJ RF{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <!-- BREADCRUMB + HEADER -->
+    <nav aria-label="breadcrumb" class="mb-2">
+        <ol class="breadcrumb breadcrumb-custom">
+            <li class="breadcrumb-item"><a href="{% url 'cnpj:home' %}">Início</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'cnpj:busca' %}">Busca</a></li>
+            <li class="breadcrumb-item active">{{ cnpj_basico }}</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
+        <div>
+            <h1 class="fw-700 mb-1" style="font-size:1.5rem;letter-spacing:-0.02em;">
+                {% if empresa %}{{ empresa.razao_social|default:cnpj_basico }}{% else %}CNPJ {{ cnpj_basico }}{% endif
+                %}
+            </h1>
+            {% if estabelecimentos %}
+            {% with est=estabelecimentos.0 %}
+            <span class="badge-situacao badge-{{ est.situacao_descricao|lower }} me-2">{{ est.situacao_descricao
+                }}</span>
+            {% endwith %}
+            {% endif %}
+            <span class="text-muted small">
+                <i class="bi bi-calendar3 me-1"></i>Competência:
+                <strong style="color:var(--accent)">{{ competencia }}</strong>
+            </span>
+        </div>
+        <!-- Selector de competência -->
+        <form method="get" id="form-comp" class="d-flex align-items-center gap-2">
+            <label class="form-label mb-0 small">Competência:</label>
+            <select name="competencia" class="form-select form-select-sm" style="width:auto;"
+                onchange="this.form.submit()" id="sel-comp">
+                {% for comp in competencias %}
+                <option value="{{ comp }}" {% if comp==competencia %}selected{% endif %}>{{ comp }}</option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+
+    <!-- TABS -->
+    <ul class="nav nav-tabs-custom mb-4" id="tabsDetalhe">
+        <li class="nav-item">
+            <a class="nav-link active" href="#tab-empresa" data-bs-toggle="tab">
+                <i class="bi bi-building me-1"></i>Empresa
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="#tab-estabelecimento" data-bs-toggle="tab">
+                <i class="bi bi-geo-alt me-1"></i>Estabelecimento{% if estabelecimentos.count > 1 %}s ({{
+                estabelecimentos.count }}){% endif %}
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="#tab-socios" data-bs-toggle="tab">
+                <i class="bi bi-people me-1"></i>Sócios ({{ socios.count }})
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="#tab-simples" data-bs-toggle="tab">
+                <i class="bi bi-star me-1"></i>Simples / MEI
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="#tab-historico" data-bs-toggle="tab">
+                <i class="bi bi-graph-up me-1"></i>Histórico
+            </a>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+
+        <!-- EMPRESA -->
+        <div class="tab-pane fade show active" id="tab-empresa">
+            <div class="card-glass p-4">
+                {% if empresa %}
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <div class="form-label">CNPJ Básico</div>
+                            <code style="color:var(--accent);font-size:1rem;">{{ empresa.cnpj_basico }}</code>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-label">Razão Social</div>
+                            <strong>{{ empresa.razao_social|default:"—" }}</strong>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-label">Natureza Jurídica</div>
+                            <span>{{ empresa.natureza_juridica|default:"—" }}</span>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-label">Qualificação do Responsável</div>
+                            <span>{{ empresa.qualificacao_responsavel|default:"—" }}</span>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <div class="form-label">Capital Social</div>
+                            <strong style="color:var(--success);">
+                                R$ {{ empresa.capital_social|default:"0,00" }}
+                            </strong>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-label">Porte</div>
+                            <span class="badge rounded-pill"
+                                style="background:rgba(14,165,233,0.12);color:#0ea5e9;border:1px solid rgba(14,165,233,0.2);">
+                                {{ empresa.porte_descricao }}
+                            </span>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-label">Ente Federativo Responsável</div>
+                            <span>{{ empresa.ente_federativo_responsavel|default:"—" }}</span>
+                        </div>
+                        <!-- API link -->
+                        <div class="mt-4 p-3 rounded"
+                            style="background:rgba(255,255,255,0.03);border:1px solid var(--border-subtle);">
+                            <div class="form-label"><i class="bi bi-code me-1"></i>API REST</div>
+                            <a href="{% url 'cnpj:api_cnpj' cnpj_basico %}" target="_blank" class="cnpj-link">
+                                /api/cnpj/{{ cnpj_basico }}/
+                            </a>
+                            <span class="text-muted ms-2 small">↗ JSON</span>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="text-center py-4 text-muted">
+                    <i class="bi bi-building" style="font-size:3rem;opacity:0.3;"></i>
+                    <p class="mt-3">Empresa não encontrada para a competência {{ competencia }}.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- ESTABELECIMENTOS -->
+        <div class="tab-pane fade" id="tab-estabelecimento">
+            {% for estab in estabelecimentos %}
+            <div class="card-glass p-4 {% if not forloop.last %}mb-3{% endif %}">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <code style="color:var(--accent);font-size:1rem;">{{ estab.cnpj_formatado }}</code>
+                        <span class="ms-2 badge-situacao badge-{{ estab.situacao_descricao|lower }}">{{
+                            estab.situacao_descricao }}</span>
+                        <span class="ms-2 text-muted small">
+                            {% if estab.identificador_matriz_filial == "1" %}
+                            <i class="bi bi-star-fill me-1" style="color:#f59e0b;"></i>Matriz
+                            {% else %}
+                            <i class="bi bi-diagram-2 me-1"></i>Filial
+                            {% endif %}
+                        </span>
+                    </div>
+                    {% if estab.nome_fantasia %}
+                    <span class="text-muted small">{{ estab.nome_fantasia }}</span>
+                    {% endif %}
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="mb-2"><span class="form-label">CNAE Principal</span><br>
+                            {% if estab.cnae_fiscal_principal %}
+                            <code class="me-1" style="color:var(--accent);">{{ estab.cnae_fiscal_principal }}</code>
+                            <span class="small">{{ cnae_principal_desc|default:"" }}</span>
+                            {% else %}—{% endif %}
+                        </div>
+                        <div class="mb-2"><span class="form-label">Endereço</span><br>
+                            <span class="small">{{ estab.endereco_completo|default:"—" }}</span>
+                        </div>
+                        <div class="mb-2"><span class="form-label">Município / UF</span><br>
+                            {{ municipio_desc|default:estab.municipio|default:"—" }}{% if estab.uf %} / <strong>{{
+                                estab.uf }}</strong>{% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-2"><span class="form-label">E-mail</span><br>
+                            {% if estab.correio_eletronico %}
+                            <a href="mailto:{{ estab.correio_eletronico }}" style="color:var(--accent);">{{
+                                estab.correio_eletronico|lower }}</a>
+                            {% else %}—{% endif %}
+                        </div>
+                        <div class="mb-2"><span class="form-label">Telefone</span><br>
+                            {% if estab.telefone1 %}({{ estab.ddd1 }}) {{ estab.telefone1 }}{% else %}—{% endif %}
+                        </div>
+                        <div class="mb-2"><span class="form-label">Data início atividade</span><br>
+                            {{ estab.data_inicio_atividade|date:"d/m/Y"|default:"—" }}
+                        </div>
+                        <div class="mb-2"><span class="form-label">Data situação cadastral</span><br>
+                            {{ estab.data_situacao_cadastral|date:"d/m/Y"|default:"—" }}
+                        </div>
+                    </div>
+                </div>
+                <!-- CNAEs Secundários -->
+                {% if estab.cnae_fiscal_secundaria %}
+                <div class="mt-3 pt-3" style="border-top:1px solid var(--border-subtle);">
+                    <div class="form-label mb-2"><i class="bi bi-grid-3x3 me-1"></i>CNAEs Secundários</div>
+                    <div class="d-flex flex-wrap gap-2">
+                        {% for cod in estab.cnae_fiscal_secundaria.split|slice:":20" %}
+                        {% with cod_clean=cod|cut:"," %}
+                        <span class="badge rounded"
+                            style="background:rgba(14,165,233,0.08);color:#94a3b8;border:1px solid var(--border-subtle);font-size:0.72rem;">
+                            {{ cod_clean }}
+                            {% with desc=cnae_secundarios_map|default:{}|dict_get:estab.pk|default:{}|dict_get:cod_clean
+                            %}
+                            {% if desc %} — {{ desc|truncatechars:40 }}{% endif %}
+                            {% endwith %}
+                        </span>
+                        {% endwith %}
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% empty %}
+            <div class="card-glass p-4 text-center text-muted">
+                <i class="bi bi-geo-alt" style="font-size:3rem;opacity:0.3;"></i>
+                <p class="mt-3">Nenhum estabelecimento encontrado para esta competência.</p>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- SÓCIOS -->
+        <div class="tab-pane fade" id="tab-socios">
+            <div class="card-glass">
+                {% if socios %}
+                <div class="table-responsive">
+                    <table class="table table-custom mb-0">
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th>Tipo</th>
+                                <th>CNPJ/CPF</th>
+                                <th>Qualificação</th>
+                                <th>Entrada</th>
+                                <th>Faixa Etária</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for socio in socios %}
+                            <tr>
+                                <td><strong>{{ socio.nome_socio|default:"—" }}</strong></td>
+                                <td>
+                                    {% if socio.identificador_socio == "1" %}
+                                    <span class="badge"
+                                        style="background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.2);">PF</span>
+                                    {% elif socio.identificador_socio == "2" %}
+                                    <span class="badge"
+                                        style="background:rgba(14,165,233,0.12);color:#0ea5e9;border:1px solid rgba(14,165,233,0.2);">PJ</span>
+                                    {% else %}
+                                    <span class="badge"
+                                        style="background:rgba(148,163,184,0.1);color:#94a3b8;">Outro</span>
+                                    {% endif %}
+                                </td>
+                                <td><code
+                                        style="color:var(--text-muted-custom);font-size:0.8rem;">{{ socio.cnpj_cpf_socio|default:"—" }}</code>
+                                </td>
+                                <td><span class="small text-muted">{{ socio.qualificacao_socio|default:"—" }}</span>
+                                </td>
+                                <td><span class="small">{{ socio.data_entrada_sociedade|date:"d/m/Y"|default:"—"
+                                        }}</span></td>
+                                <td><span class="small">{{ socio.faixa_etaria_descricao }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="p-4 text-center text-muted">
+                    <i class="bi bi-people" style="font-size:3rem;opacity:0.3;"></i>
+                    <p class="mt-3">Nenhum sócio encontrado para esta competência.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- SIMPLES / MEI -->
+        <div class="tab-pane fade" id="tab-simples">
+            <div class="card-glass p-4">
+                {% if simples %}
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <div class="p-3 rounded mb-3"
+                            style="background:rgba({% if simples.opcao_simples == 'S' %}16,185,129{% else %}239,68,68{% endif %},0.08);border:1px solid rgba({% if simples.opcao_simples == 'S' %}16,185,129{% else %}239,68,68{% endif %},0.2);">
+                            <h3 class="fw-600 mb-3" style="font-size:0.9rem;"><i class="bi bi-star me-2"></i>Simples
+                                Nacional</h3>
+                            <div class="mb-2">
+                                <span class="form-label">Situação</span><br>
+                                {% if simples.opcao_simples == 'S' %}
+                                <span class="badge-situacao badge-ativa">OPTANTE</span>
+                                {% else %}
+                                <span class="badge-situacao badge-baixada">NÃO OPTANTE</span>
+                                {% endif %}
+                            </div>
+                            <div class="mb-2"><span class="form-label">Data de opção</span><br>
+                                {{ simples.data_opcao_simples|date:"d/m/Y"|default:"—" }}
+                            </div>
+                            <div><span class="form-label">Data de exclusão</span><br>
+                                {{ simples.data_exclusao_simples|date:"d/m/Y"|default:"—" }}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-3 rounded"
+                            style="background:rgba({% if simples.opcao_mei == 'S' %}16,185,129{% else %}239,68,68{% endif %},0.08);border:1px solid rgba({% if simples.opcao_mei == 'S' %}16,185,129{% else %}239,68,68{% endif %},0.2);">
+                            <h3 class="fw-600 mb-3" style="font-size:0.9rem;"><i class="bi bi-lightning me-2"></i>MEI —
+                                Microempreendedor Individual</h3>
+                            <div class="mb-2">
+                                <span class="form-label">Situação</span><br>
+                                {% if simples.opcao_mei == 'S' %}
+                                <span class="badge-situacao badge-ativa">OPTANTE</span>
+                                {% else %}
+                                <span class="badge-situacao badge-baixada">NÃO OPTANTE</span>
+                                {% endif %}
+                            </div>
+                            <div class="mb-2"><span class="form-label">Data de opção</span><br>
+                                {{ simples.data_opcao_mei|date:"d/m/Y"|default:"—" }}
+                            </div>
+                            <div><span class="form-label">Data de exclusão</span><br>
+                                {{ simples.data_exclusao_mei|date:"d/m/Y"|default:"—" }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-4">
+                    <i class="bi bi-star" style="font-size:3rem;opacity:0.3;"></i>
+                    <p class="mt-3">Sem informações de Simples Nacional para esta competência.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- HISTÓRICO -->
+        <div class="tab-pane fade" id="tab-historico">
+            <div class="row g-3">
+                <!-- GRÁFICO -->
+                <div class="col-lg-8">
+                    <div class="card-glass p-4">
+                        <h3 class="fw-600 mb-4"
+                            style="font-size:0.9rem;color:var(--text-muted-custom);text-transform:uppercase;letter-spacing:0.05em;">
+                            <i class="bi bi-graph-up me-2"></i>Evolução da Situação Cadastral
+                        </h3>
+                        {% if historico_labels %}
+                        <canvas id="chartHistorico" height="80"></canvas>
+                        {% else %}
+                        <div class="text-center text-muted py-4">
+                            <i class="bi bi-bar-chart" style="font-size:3rem;opacity:0.3;"></i>
+                            <p class="mt-3">Dados históricos insuficientes.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                <!-- COMPARATIVO -->
+                <div class="col-lg-4">
+                    <div class="card-glass p-4 h-100">
+                        <h3 class="fw-600 mb-3"
+                            style="font-size:0.9rem;color:var(--text-muted-custom);text-transform:uppercase;letter-spacing:0.05em;">
+                            <i class="bi bi-arrow-left-right me-2"></i>Competências disponíveis
+                        </h3>
+                        <div class="d-flex flex-column gap-2">
+                            {% for comp in competencias_cnpj %}
+                            <a href="?competencia={{ comp }}"
+                                class="d-flex justify-content-between align-items-center p-2 rounded text-decoration-none"
+                                style="background:{% if comp == competencia %}rgba(26,86,219,0.15);border:1px solid rgba(26,86,219,0.3){% else %}rgba(255,255,255,0.03);border:1px solid var(--border-subtle){% endif %};">
+                                <span class="small fw-500"
+                                    style="color:{% if comp == competencia %}var(--accent){% else %}#e2e8f0{% endif %};">
+                                    {{ comp }}
+                                </span>
+                                {% if comp == competencia %}
+                                <span class="badge"
+                                    style="background:rgba(26,86,219,0.2);color:#60a5fa;font-size:0.65rem;">atual</span>
+                                {% else %}
+                                <i class="bi bi-chevron-right"
+                                    style="color:var(--text-muted-custom);font-size:0.7rem;"></i>
+                                {% endif %}
+                            </a>
+                            {% empty %}
+                            <p class="text-muted small">Apenas uma competência disponível.</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- /tab-content -->
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const SITUACAO_MAP = { 0: 'Nula', 1: 'Inapta', 2: 'Baixada', 3: 'Suspensa', 5: 'Ativa' };
+    const SITUACAO_COLORS = {
+        0: '#64748b', 1: '#ef4444', 2: '#ef4444', 3: '#f59e0b', 5: '#10b981'
+    };
+
+    {% if historico_labels %}
+    const labels = {{ historico_labels| safe }};
+    const data = {{ historico_data| safe }};
+
+    const ctx = document.getElementById('chartHistorico').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Situação Cadastral',
+                data,
+                borderColor: '#0ea5e9',
+                backgroundColor: 'rgba(14,165,233,0.08)',
+                pointBackgroundColor: data.map(v => SITUACAO_COLORS[v] || '#0ea5e9'),
+                pointRadius: 5,
+                pointHoverRadius: 7,
+                tension: 0.3,
+                fill: true,
+            }]
+        },
+        options: {
+            responsive: true,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#1e293b',
+                    borderColor: 'rgba(255,255,255,0.08)',
+                    borderWidth: 1,
+                    callbacks: {
+                        label: ctx => ' Situação: ' + (SITUACAO_MAP[ctx.raw] || ctx.raw)
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#94a3b8', font: { size: 11 } }
+                },
+                y: {
+                    min: 0, max: 5,
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: {
+                        color: '#94a3b8',
+                        font: { size: 11 },
+                        callback: v => SITUACAO_MAP[v] || ''
+                    }
+                }
+            }
+        }
+    });
+    {% endif %}
+</script>
+{% endblock %}

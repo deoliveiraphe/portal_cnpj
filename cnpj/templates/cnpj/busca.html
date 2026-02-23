@@ -1,0 +1,285 @@
+{% extends "cnpj/base.html" %}
+{% load cnpj_extras %}
+{% block title %}Busca de Empresas — Portal CNPJ RF{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <!-- BREADCRUMB -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb breadcrumb-custom">
+            <li class="breadcrumb-item"><a href="{% url 'cnpj:home' %}">Início</a></li>
+            <li class="breadcrumb-item active">Busca</li>
+        </ol>
+    </nav>
+
+    <h1 class="fw-700 mb-4" style="font-size:1.5rem;letter-spacing:-0.02em;">
+        <i class="bi bi-search me-2" style="color:var(--accent);"></i>Busca de Empresas
+    </h1>
+
+    <!-- FILTROS -->
+    <div class="card-glass mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-funnel me-2"></i>Filtros</span>
+            <button class="btn btn-sm btn-link text-secondary p-0" data-bs-toggle="collapse"
+                data-bs-target="#filtrosBody">
+                <i class="bi bi-chevron-up" id="filtros-icon"></i>
+            </button>
+        </div>
+        <div class="collapse show" id="filtrosBody">
+            <div class="p-4">
+                <form method="get" id="form-busca">
+                    <div class="row g-3">
+                        <!-- Competência -->
+                        <div class="col-md-3">
+                            <label class="form-label">Competência</label>
+                            <select name="competencia" class="form-select" id="sel-competencia">
+                                {% for comp in competencias %}
+                                <option value="{{ comp }}" {% if comp==competencia %}selected{% endif %}>{{ comp }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <!-- CNPJ -->
+                        <div class="col-md-3">
+                            <label class="form-label">CNPJ</label>
+                            <input type="text" name="cnpj" class="form-control" placeholder="00.000.000/0001-00"
+                                value="{{ filtros.cnpj|default:'' }}" id="inp-cnpj">
+                        </div>
+                        <!-- Razão Social -->
+                        <div class="col-md-6">
+                            <label class="form-label">Razão Social</label>
+                            <input type="text" name="razao_social" class="form-control" placeholder="Busca parcial..."
+                                value="{{ filtros.razao_social|default:'' }}" id="inp-razao">
+                        </div>
+                        <!-- CNAE Principal -->
+                        <div class="col-md-3">
+                            <label class="form-label">CNAE Principal</label>
+                            <input type="text" name="cnae_principal" class="form-control"
+                                placeholder="Código ou descrição" value="{{ filtros.cnae_principal|default:'' }}"
+                                id="inp-cnae">
+                        </div>
+                        <!-- Município -->
+                        <div class="col-md-3">
+                            <label class="form-label">Município</label>
+                            <input type="text" name="municipio" class="form-control" placeholder="Nome ou código"
+                                value="{{ filtros.municipio|default:'' }}" id="inp-mun">
+                        </div>
+                        <!-- UF -->
+                        <div class="col-md-2">
+                            <label class="form-label">UF</label>
+                            <select name="uf" class="form-select" id="sel-uf">
+                                <option value="">Todas</option>
+                                {% for uf in "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP
+                                SE TO"|split:" " %}
+                                <option value="{{ uf }}" {% if filtros.uf==uf %}selected{% endif %}>{{ uf }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <!-- Situação -->
+                        <div class="col-md-2">
+                            <label class="form-label">Situação</label>
+                            <select name="situacao_cadastral" class="form-select" id="sel-situacao">
+                                <option value="">Todas</option>
+                                {% for cod, label in situacao_choices %}
+                                <option value="{{ cod }}" {% if filtros.situacao_cadastral==cod %}selected{% endif %}>{{
+                                    label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <!-- Porte -->
+                        <div class="col-md-2">
+                            <label class="form-label">Porte</label>
+                            <select name="porte" class="form-select" id="sel-porte">
+                                <option value="">Todos</option>
+                                {% for cod, label in porte_choices %}
+                                <option value="{{ cod }}" {% if filtros.porte==cod %}selected{% endif %}>{{ label }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <!-- Simples / MEI -->
+                        <div class="col-md-2">
+                            <label class="form-label">Simples Nacional</label>
+                            <select name="simples" class="form-select" id="sel-simples">
+                                <option value="">Todos</option>
+                                <option value="S" {% if filtros.simples=="S" %}selected{% endif %}>Optante</option>
+                                <option value="N" {% if filtros.simples=="N" %}selected{% endif %}>Não optante</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">MEI</label>
+                            <select name="mei" class="form-select" id="sel-mei">
+                                <option value="">Todos</option>
+                                <option value="S" {% if filtros.mei=="S" %}selected{% endif %}>Optante</option>
+                                <option value="N" {% if filtros.mei=="N" %}selected{% endif %}>Não optante</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2 mt-4">
+                        <button type="submit" class="btn btn-primary-custom px-4" id="btn-buscar">
+                            <i class="bi bi-search me-2"></i>Buscar
+                        </button>
+                        <a href="{% url 'cnpj:busca' %}" class="btn btn-outline-secondary px-3">
+                            <i class="bi bi-x-lg me-1"></i>Limpar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- RESULTADOS -->
+    <div class="card-glass">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span>
+                <i class="bi bi-table me-2"></i>
+                Resultados
+                {% if total %}
+                <span class="ms-2 badge rounded-pill"
+                    style="background:rgba(14,165,233,0.15);color:#0ea5e9;font-size:0.75rem;">
+                    {{ total|default:"0" }} empresa{{ total|pluralize:"s" }}
+                </span>
+                {% endif %}
+            </span>
+            {% if elapsed %}
+            <span class="text-muted" style="font-size:0.75rem;">
+                <i class="bi bi-clock me-1"></i>{{ elapsed }}s
+            </span>
+            {% endif %}
+        </div>
+
+        {% if page_obj %}
+        <div class="table-responsive">
+            <table class="table table-custom mb-0">
+                <thead>
+                    <tr>
+                        <th>CNPJ</th>
+                        <th>Razão Social</th>
+                        <th>Situação</th>
+                        <th>Município / UF</th>
+                        <th>CNAE Principal</th>
+                        <th>Porte</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for estab in page_obj %}
+                    {% with empresa=empresas_map|default:{}|dict_get:estab.cnpj_basico %}
+                    <tr>
+                        <td>
+                            <a href="{% url 'cnpj:detalhe' estab.cnpj_basico %}?competencia={{ competencia }}"
+                                class="cnpj-link">
+                                {{ estab.cnpj_complexo|default:estab.cnpj_basico }}
+                            </a>
+                        </td>
+                        <td>
+                            <div style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                                title="{{ empresa.razao_social|default:'—' }}">
+                                {{ empresa.razao_social|default:"—" }}
+                            </div>
+                            {% if estab.nome_fantasia %}
+                            <small class="text-muted">{{ estab.nome_fantasia }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% with sit=estab.situacao_descricao %}
+                            <span class="badge-situacao badge-{{ sit|lower }}">{{ sit }}</span>
+                            {% endwith %}
+                        </td>
+                        <td>
+                            <span>{{ mun_map|default:{}|dict_get:estab.municipio|default:estab.municipio|default:"—"
+                                }}</span>
+                            {% if estab.uf %}<span class="ms-1 text-muted small">/ {{ estab.uf }}</span>{% endif %}
+                        </td>
+                        <td>
+                            <div style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                                title="{{ cnae_map|default:{}|dict_get:estab.cnae_fiscal_principal|default:'' }}">
+                                {% if estab.cnae_fiscal_principal %}
+                                <code class="me-1"
+                                    style="color:var(--accent);font-size:0.75rem;">{{ estab.cnae_fiscal_principal }}</code>
+                                {{ cnae_map|default:{}|dict_get:estab.cnae_fiscal_principal|default:"—" }}
+                                {% else %}—{% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            {% if empresa %}
+                            <span class="text-muted small">{{ empresa.porte_descricao }}</span>
+                            {% else %}—{% endif %}
+                        </td>
+                    </tr>
+                    {% endwith %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- PAGINAÇÃO -->
+        {% if page_obj.has_other_pages %}
+        <div class="p-3 d-flex justify-content-center">
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?{% url_replace page=page_obj.previous_page_number %}">
+                            <i class="bi bi-chevron-left"></i>
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-left"></i></span>
+                    </li>
+                    {% endif %}
+
+                    {% for num in page_obj.paginator.page_range %}
+                    {% if page_obj.number == num %}
+                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                    {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %} <li class="page-item">
+                        <a class="page-link" href="?{% url_replace page=num %}">{{ num }}</a>
+                        </li>
+                        {% endif %}
+                        {% endfor %}
+
+                        {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?{% url_replace page=page_obj.next_page_number %}">
+                                <i class="bi bi-chevron-right"></i>
+                            </a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled"><span class="page-link"><i
+                                    class="bi bi-chevron-right"></i></span></li>
+                        {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+
+        {% else %}
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-inbox" style="font-size:3rem;opacity:0.3;"></i>
+            <p class="mt-3 mb-0">Nenhum resultado encontrado.</p>
+            <p class="small">Tente ampliar os filtros ou selecionar outra competência.</p>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Toggle ícone dos filtros
+    document.getElementById('filtrosBody').addEventListener('hide.bs.collapse', () => {
+        document.getElementById('filtros-icon').className = 'bi bi-chevron-down';
+    });
+    document.getElementById('filtrosBody').addEventListener('show.bs.collapse', () => {
+        document.getElementById('filtros-icon').className = 'bi bi-chevron-up';
+    });
+
+    // Loader no botão buscar
+    document.getElementById('form-busca').addEventListener('submit', () => {
+        const btn = document.getElementById('btn-buscar');
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Buscando...';
+        btn.disabled = true;
+    });
+</script>
+{% endblock %}

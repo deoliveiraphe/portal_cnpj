@@ -1,0 +1,117 @@
+{% extends "cnpj/base.html" %}
+{% block title %}Início — Portal CNPJ RF{% endblock %}
+
+{% block content %}
+<!-- HERO -->
+<section class="hero-gradient">
+    <div class="container py-4">
+        <div class="row align-items-center">
+            <div class="col-lg-7">
+                <h1 class="fw-700 mb-2" style="font-size:2rem;letter-spacing:-0.03em;">
+                    <span
+                        style="background:linear-gradient(135deg,#1a56db,#0ea5e9);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Portal
+                        de Dados Abertos</span><br>CNPJ · Receita Federal
+                </h1>
+                <p class="text-muted mb-4" style="font-size:1rem;max-width:520px;">
+                    Consulte o Cadastro Nacional de Pessoas Jurídicas com dados mensais da Receita Federal. Busca por
+                    CNPJ, razão social, CNAE, município e muito mais.
+                </p>
+                <form action="{% url 'cnpj:busca' %}" method="get" class="d-flex gap-2 flex-wrap">
+                    <input type="text" name="cnpj" class="form-control" placeholder="CNPJ ou Razão Social..."
+                        style="max-width:320px;" id="search-hero">
+                    <button type="submit" class="btn btn-primary-custom px-4">
+                        <i class="bi bi-search me-2"></i>Buscar
+                    </button>
+                </form>
+            </div>
+            <div class="col-lg-5 d-none d-lg-flex justify-content-end">
+                <div class="row g-3" style="max-width:360px;width:100%;">
+                    <div class="col-6">
+                        <div class="stat-card h-100">
+                            <div class="stat-number">{{ total_empresas|default:"—" }}</div>
+                            <div class="stat-label"><i class="bi bi-building me-1"></i>Empresas na última competência
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="stat-card h-100">
+                            <div class="stat-number">{{ competencias|length }}</div>
+                            <div class="stat-label"><i class="bi bi-calendar3 me-1"></i>Competências disponíveis</div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="stat-card h-100">
+                            <div class="stat-number">{{ total_cargas }}</div>
+                            <div class="stat-label"><i class="bi bi-check-circle me-1"></i>Cargas concluídas</div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="stat-card h-100">
+                            <div class="stat-number">14</div>
+                            <div class="stat-label"><i class="bi bi-archive me-1"></i>Meses de histórico</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- FUNCIONALIDADES -->
+<section class="container py-5">
+    <h2 class="fw-600 mb-4"
+        style="font-size:1.1rem;color:var(--text-muted-custom);letter-spacing:0.05em;text-transform:uppercase;">O que
+        você pode fazer</h2>
+    <div class="row g-3">
+        <div class="col-md-4">
+            <div class="card-glass p-4 h-100">
+                <div class="mb-3" style="font-size:2rem;">🔍</div>
+                <h3 class="fw-600 mb-2" style="font-size:1rem;">Busca Avançada</h3>
+                <p class="text-muted small mb-3">Filtre por CNPJ, razão social, CNAE, município, UF, situação, porte,
+                    Simples Nacional e MEI.</p>
+                <a href="{% url 'cnpj:busca' %}" class="btn btn-primary-custom btn-sm">
+                    <i class="bi bi-search me-1"></i>Buscar empresas
+                </a>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card-glass p-4 h-100">
+                <div class="mb-3" style="font-size:2rem;">📊</div>
+                <h3 class="fw-600 mb-2" style="font-size:1rem;">Histórico Completo</h3>
+                <p class="text-muted small mb-3">Visualize a evolução histórica de cada CNPJ mês a mês. Compare
+                    situações entre competências.</p>
+                <a href="{% url 'cnpj:busca' %}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-graph-up me-1"></i>Ver histórico
+                </a>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card-glass p-4 h-100">
+                <div class="mb-3" style="font-size:2rem;">⚡</div>
+                <h3 class="fw-600 mb-2" style="font-size:1rem;">API REST</h3>
+                <p class="text-muted small mb-3">Acesse os dados programaticamente via JSON. Ideal para integração com
+                    sistemas.</p>
+                <code class="d-block p-2 rounded small"
+                    style="background:rgba(255,255,255,0.05);color:var(--accent);">GET /api/cnpj/00000000/</code>
+            </div>
+        </div>
+    </div>
+
+    <!-- COMPETÊNCIAS DISPONÍVEIS -->
+    {% if competencias %}
+    <div class="mt-5">
+        <h2 class="fw-600 mb-3"
+            style="font-size:1.1rem;color:var(--text-muted-custom);letter-spacing:0.05em;text-transform:uppercase;">
+            Competências disponíveis</h2>
+        <div class="d-flex flex-wrap gap-2">
+            {% for comp in competencias %}
+            <a href="{% url 'cnpj:busca' %}?competencia={{ comp }}" class="badge rounded-pill text-decoration-none"
+                style="background:rgba(14,165,233,0.12);color:#0ea5e9;border:1px solid rgba(14,165,233,0.25);font-size:0.8rem;padding:6px 14px;">
+                {{ comp }}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}
