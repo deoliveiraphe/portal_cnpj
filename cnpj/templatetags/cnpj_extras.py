@@ -13,9 +13,17 @@ register = template.Library()
 @register.filter
 def dict_get(d, key):
     """Acessa dicionário por chave em template: {{ meu_dict|dict_get:chave }}"""
-    if d is None:
+    if not isinstance(d, dict):
         return None
     return d.get(key)
+
+
+@register.filter
+def split(value, arg):
+    """Divide uma string por um delimitador: {{ valor|split:"," }}"""
+    if value is None:
+        return []
+    return value.split(arg)
 
 
 @register.simple_tag(takes_context=True)

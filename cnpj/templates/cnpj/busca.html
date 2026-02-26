@@ -35,7 +35,7 @@
                             <label class="form-label">Competência</label>
                             <select name="competencia" class="form-select" id="sel-competencia">
                                 {% for comp in competencias %}
-                                <option value="{{ comp }}" {% if comp==competencia %}selected{% endif %}>{{ comp }}
+                                <option value="{{ comp }}" {% if comp == competencia %}selected{% endif %}>{{ comp }}
                                 </option>
                                 {% endfor %}
                             </select>
@@ -70,9 +70,8 @@
                             <label class="form-label">UF</label>
                             <select name="uf" class="form-select" id="sel-uf">
                                 <option value="">Todas</option>
-                                {% for uf in "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP
-                                SE TO"|split:" " %}
-                                <option value="{{ uf }}" {% if filtros.uf==uf %}selected{% endif %}>{{ uf }}</option>
+                                {% for uf in "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO"|split:" " %}
+                                <option value="{{ uf }}" {% if filtros.uf == uf %}selected{% endif %}>{{ uf }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -82,7 +81,7 @@
                             <select name="situacao_cadastral" class="form-select" id="sel-situacao">
                                 <option value="">Todas</option>
                                 {% for cod, label in situacao_choices %}
-                                <option value="{{ cod }}" {% if filtros.situacao_cadastral==cod %}selected{% endif %}>{{
+                                <option value="{{ cod }}" {% if filtros.situacao_cadastral == cod %}selected{% endif %}>{{
                                     label }}</option>
                                 {% endfor %}
                             </select>
@@ -93,7 +92,8 @@
                             <select name="porte" class="form-select" id="sel-porte">
                                 <option value="">Todos</option>
                                 {% for cod, label in porte_choices %}
-                                <option value="{{ cod }}" {% if filtros.porte==cod %}selected{% endif %}>{{ label }}
+                                <option value="{{ cod }}" {% if filtros.porte == cod %}selected{% endif %}>{{ label }}
+                                </option>
                                 </option>
                                 {% endfor %}
                             </select>
@@ -103,16 +103,16 @@
                             <label class="form-label">Simples Nacional</label>
                             <select name="simples" class="form-select" id="sel-simples">
                                 <option value="">Todos</option>
-                                <option value="S" {% if filtros.simples=="S" %}selected{% endif %}>Optante</option>
-                                <option value="N" {% if filtros.simples=="N" %}selected{% endif %}>Não optante</option>
+                                <option value="S" {% if filtros.simples == "S" %}selected{% endif %}>Optante</option>
+                                <option value="N" {% if filtros.simples == "N" %}selected{% endif %}>Não optante</option>
                             </select>
                         </div>
                         <div class="col-md-2">
                             <label class="form-label">MEI</label>
                             <select name="mei" class="form-select" id="sel-mei">
                                 <option value="">Todos</option>
-                                <option value="S" {% if filtros.mei=="S" %}selected{% endif %}>Optante</option>
-                                <option value="N" {% if filtros.mei=="N" %}selected{% endif %}>Não optante</option>
+                                <option value="S" {% if filtros.mei == "S" %}selected{% endif %}>Optante</option>
+                                <option value="N" {% if filtros.mei == "N" %}selected{% endif %}>Não optante</option>
                             </select>
                         </div>
                     </div>
@@ -164,7 +164,7 @@
                 </thead>
                 <tbody>
                     {% for estab in page_obj %}
-                    {% with empresa=empresas_map|default:{}|dict_get:estab.cnpj_basico %}
+                    {% with empresa=empresas_map|dict_get:estab.cnpj_basico %}
                     <tr>
                         <td>
                             <a href="{% url 'cnpj:detalhe' estab.cnpj_basico %}?competencia={{ competencia }}"
@@ -187,17 +187,17 @@
                             {% endwith %}
                         </td>
                         <td>
-                            <span>{{ mun_map|default:{}|dict_get:estab.municipio|default:estab.municipio|default:"—"
+                            <span>{{ mun_map|dict_get:estab.municipio|default:estab.municipio|default:"—"
                                 }}</span>
                             {% if estab.uf %}<span class="ms-1 text-muted small">/ {{ estab.uf }}</span>{% endif %}
                         </td>
                         <td>
                             <div style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
-                                title="{{ cnae_map|default:{}|dict_get:estab.cnae_fiscal_principal|default:'' }}">
+                                title="{{ cnae_map|dict_get:estab.cnae_fiscal_principal|default:'' }}">
                                 {% if estab.cnae_fiscal_principal %}
                                 <code class="me-1"
                                     style="color:var(--accent);font-size:0.75rem;">{{ estab.cnae_fiscal_principal }}</code>
-                                {{ cnae_map|default:{}|dict_get:estab.cnae_fiscal_principal|default:"—" }}
+                                {{ cnae_map|dict_get:estab.cnae_fiscal_principal|default:"—" }}
                                 {% else %}—{% endif %}
                             </div>
                         </td>
