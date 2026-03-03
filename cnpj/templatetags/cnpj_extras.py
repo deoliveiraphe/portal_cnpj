@@ -5,6 +5,7 @@ Inclui:
 - dict_get: acessa dicionários em templates
 - url_replace: modifica parâmetros GET na URL preservando os demais
 """
+
 from django import template
 
 register = template.Library()

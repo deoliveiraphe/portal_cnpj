@@ -6,13 +6,14 @@ Tabelas principais: possuem campo competencia (YYYY-MM) p/ manutenção do hist�
 
 Todos os campos de código são CharField para preservar zeros à esquerda.
 """
-from django.db import models
-from django.contrib.postgres.indexes import GinIndex
 
+from django.contrib.postgres.indexes import GinIndex
+from django.db import models
 
 # ─────────────────────────────────────────────
 # TABELAS DE DOMÍNIO
 # ─────────────────────────────────────────────
+
 
 class Cnae(models.Model):
     codigo = models.CharField("Código", max_length=7, primary_key=True)
@@ -102,14 +103,19 @@ class Motivo(models.Model):
 # TABELAS PRINCIPAIS (com competencia)
 # ─────────────────────────────────────────────
 
+
 class Empresa(models.Model):
     cnpj_basico = models.CharField("CNPJ Básico", max_length=8, db_index=True)
     razao_social = models.CharField("Razão Social", max_length=150, blank=True, null=True)
     natureza_juridica = models.CharField("Natureza Jurídica", max_length=4, blank=True, null=True)
-    qualificacao_responsavel = models.CharField("Qualificação do Responsável", max_length=2, blank=True, null=True)
+    qualificacao_responsavel = models.CharField(
+        "Qualificação do Responsável", max_length=2, blank=True, null=True
+    )
     capital_social = models.CharField("Capital Social", max_length=20, blank=True, null=True)
     porte = models.CharField("Porte", max_length=2, blank=True, null=True)
-    ente_federativo_responsavel = models.CharField("Ente Federativo Responsável", max_length=50, blank=True, null=True)
+    ente_federativo_responsavel = models.CharField(
+        "Ente Federativo Responsável", max_length=50, blank=True, null=True
+    )
     competencia = models.CharField("Competência", max_length=7, db_index=True)
 
     class Meta:
@@ -118,7 +124,9 @@ class Empresa(models.Model):
         verbose_name_plural = "Empresas"
         indexes = [
             models.Index(fields=["cnpj_basico", "competencia"], name="idx_empresa_cnpj_comp"),
-            GinIndex(fields=["razao_social"], name="idx_empresa_razao_gin", opclasses=["gin_trgm_ops"]),
+            GinIndex(
+                fields=["razao_social"], name="idx_empresa_razao_gin", opclasses=["gin_trgm_ops"]
+            ),
         ]
 
     def __str__(self):
@@ -139,15 +147,25 @@ class Estabelecimento(models.Model):
     cnpj_basico = models.CharField("CNPJ Básico", max_length=8, db_index=True)
     cnpj_ordem = models.CharField("CNPJ Ordem", max_length=4)
     cnpj_dv = models.CharField("CNPJ DV", max_length=2)
-    identificador_matriz_filial = models.CharField("Matriz/Filial", max_length=1, blank=True, null=True)
+    identificador_matriz_filial = models.CharField(
+        "Matriz/Filial", max_length=1, blank=True, null=True
+    )
     nome_fantasia = models.CharField("Nome Fantasia", max_length=55, blank=True, null=True)
-    situacao_cadastral = models.CharField("Situação Cadastral", max_length=2, blank=True, null=True, db_index=True)
+    situacao_cadastral = models.CharField(
+        "Situação Cadastral", max_length=2, blank=True, null=True, db_index=True
+    )
     data_situacao_cadastral = models.DateField("Data Situação Cadastral", blank=True, null=True)
-    motivo_situacao_cadastral = models.CharField("Motivo Situação Cadastral", max_length=2, blank=True, null=True)
-    nome_cidade_exterior = models.CharField("Nome Cidade Exterior", max_length=55, blank=True, null=True)
+    motivo_situacao_cadastral = models.CharField(
+        "Motivo Situação Cadastral", max_length=2, blank=True, null=True
+    )
+    nome_cidade_exterior = models.CharField(
+        "Nome Cidade Exterior", max_length=55, blank=True, null=True
+    )
     pais = models.CharField("País", max_length=3, blank=True, null=True)
     data_inicio_atividade = models.DateField("Data Início Atividade", blank=True, null=True)
-    cnae_fiscal_principal = models.CharField("CNAE Fiscal Principal", max_length=7, blank=True, null=True, db_index=True)
+    cnae_fiscal_principal = models.CharField(
+        "CNAE Fiscal Principal", max_length=7, blank=True, null=True, db_index=True
+    )
     cnae_fiscal_secundaria = models.TextField("CNAEs Secundários", blank=True, null=True)
     tipo_logradouro = models.CharField("Tipo Logradouro", max_length=20, blank=True, null=True)
     logradouro = models.CharField("Logradouro", max_length=60, blank=True, null=True)
@@ -156,7 +174,9 @@ class Estabelecimento(models.Model):
     bairro = models.CharField("Bairro", max_length=50, blank=True, null=True)
     cep = models.CharField("CEP", max_length=8, blank=True, null=True)
     uf = models.CharField("UF", max_length=2, blank=True, null=True, db_index=True)
-    municipio = models.CharField("Município (código)", max_length=7, blank=True, null=True, db_index=True)
+    municipio = models.CharField(
+        "Município (código)", max_length=7, blank=True, null=True, db_index=True
+    )
     ddd1 = models.CharField("DDD 1", max_length=4, blank=True, null=True)
     telefone1 = models.CharField("Telefone 1", max_length=8, blank=True, null=True)
     ddd2 = models.CharField("DDD 2", max_length=4, blank=True, null=True)
@@ -175,7 +195,9 @@ class Estabelecimento(models.Model):
         indexes = [
             models.Index(fields=["cnpj_basico", "competencia"], name="idx_estab_cnpj_comp"),
             models.Index(fields=["uf", "municipio", "competencia"], name="idx_estab_uf_municipio"),
-            models.Index(fields=["cnae_fiscal_principal", "competencia"], name="idx_estab_cnae_comp"),
+            models.Index(
+                fields=["cnae_fiscal_principal", "competencia"], name="idx_estab_cnae_comp"
+            ),
             models.Index(fields=["situacao_cadastral", "competencia"], name="idx_estab_sit_comp"),
         ]
 
@@ -219,15 +241,27 @@ class Estabelecimento(models.Model):
 
 class Socio(models.Model):
     cnpj_basico = models.CharField("CNPJ Básico", max_length=8, db_index=True)
-    identificador_socio = models.CharField("Identificador do Sócio", max_length=1, blank=True, null=True)
+    identificador_socio = models.CharField(
+        "Identificador do Sócio", max_length=1, blank=True, null=True
+    )
     nome_socio = models.CharField("Nome do Sócio", max_length=150, blank=True, null=True)
-    cnpj_cpf_socio = models.CharField("CNPJ/CPF do Sócio (mascarado)", max_length=14, blank=True, null=True)
-    qualificacao_socio = models.CharField("Qualificação do Sócio", max_length=2, blank=True, null=True)
+    cnpj_cpf_socio = models.CharField(
+        "CNPJ/CPF do Sócio (mascarado)", max_length=14, blank=True, null=True
+    )
+    qualificacao_socio = models.CharField(
+        "Qualificação do Sócio", max_length=2, blank=True, null=True
+    )
     data_entrada_sociedade = models.DateField("Data Entrada na Sociedade", blank=True, null=True)
     pais = models.CharField("País", max_length=3, blank=True, null=True)
-    representante_legal = models.CharField("CPF Representante Legal", max_length=11, blank=True, null=True)
-    nome_representante = models.CharField("Nome do Representante", max_length=60, blank=True, null=True)
-    qualificacao_representante = models.CharField("Qualificação Representante", max_length=2, blank=True, null=True)
+    representante_legal = models.CharField(
+        "CPF Representante Legal", max_length=11, blank=True, null=True
+    )
+    nome_representante = models.CharField(
+        "Nome do Representante", max_length=60, blank=True, null=True
+    )
+    qualificacao_representante = models.CharField(
+        "Qualificação Representante", max_length=2, blank=True, null=True
+    )
     faixa_etaria = models.CharField("Faixa Etária", max_length=1, blank=True, null=True)
     competencia = models.CharField("Competência", max_length=7, db_index=True)
 
@@ -275,7 +309,9 @@ class Simples(models.Model):
         verbose_name_plural = "Simples Nacional / MEI"
         indexes = [
             models.Index(fields=["cnpj_basico", "competencia"], name="idx_simples_cnpj_comp"),
-            models.Index(fields=["opcao_simples", "opcao_mei", "competencia"], name="idx_simples_opcoes_comp"),
+            models.Index(
+                fields=["opcao_simples", "opcao_mei", "competencia"], name="idx_simples_opcoes_comp"
+            ),
         ]
 
     def __str__(self):
@@ -285,6 +321,7 @@ class Simples(models.Model):
 # ─────────────────────────────────────────────
 # AUDITORIA
 # ─────────────────────────────────────────────
+
 
 class CargaLog(models.Model):
     STATUS_CHOICES = [

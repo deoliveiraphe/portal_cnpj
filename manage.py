@@ -1,6 +1,7 @@
 """
 Ponto de entrada do manage.py
 """
+
 import os
 import sys
 

@@ -6,7 +6,13 @@ Uso:
     python manage.py download_cnpj --start 2025-01 --end 2026-01
     python manage.py download_cnpj --only-latest
     python manage.py download_cnpj --start 2025-06 --end 2025-06
+
+Modo Lite (economia de espaço/tempo):
+    python manage.py download_cnpj --only-latest --slices 1
+    python manage.py download_cnpj --only-latest --slices 2 --skip-tables simples
+    python manage.py download_cnpj --only-latest --lite
 """
+
 import logging
 import time
 from datetime import date
@@ -17,9 +23,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from tqdm import tqdm
 
-BASE_URL = (
-    "https://arquivos.receitafederal.gov.br/public.php/dav/files/YggdBLfdninEJX9"
-)
+BASE_URL = "https://arquivos.receitafederal.gov.br/public.php/dav/files/YggdBLfdninEJX9"
 
 # Todos os 33 arquivos disponíveis por competência
 FILES_DOMINIO = [
@@ -38,9 +42,57 @@ FILES_PARTICIONADOS = (
 )
 ALL_FILES = FILES_DOMINIO + FILES_PARTICIONADOS
 
+# Mapeamento tipo → prefixo de arquivo (para --skip-tables)
+TIPO_PREFIXO = {
+    "empresa": "Empresas",
+    "estabelecimento": "Estabelecimentos",
+    "socio": "Socios",
+    "simples": "Simples",
+}
+
+
+def _filtrar_arquivos(
+    arquivos: list[str],
+    slices: int | None,
+    skip_tables: list[str],
+) -> list[str]:
+    """Filtra a lista de arquivos para o modo lite.
+
+    Args:
+        arquivos: lista completa de arquivos a baixar.
+        slices: se informado, mantém apenas os N primeiros ZIPs de cada
+                tipo particionado (0..N-1). Domínio não é afetado.
+        skip_tables: lista de tipos a ignorar (ex: ["simples", "socio"]).
+    """
+    prefixos_skip = {TIPO_PREFIXO[t] for t in skip_tables if t in TIPO_PREFIXO}
+
+    resultado = []
+    for arq in arquivos:
+        # Verifica se o arquivo pertence a um tipo ignorado
+        if any(arq.startswith(p) for p in prefixos_skip):
+            continue
+
+        # Aplica filtro de slices apenas para particionados
+        if slices is not None and slices < 10:
+            for tipo_prefix in ["Empresas", "Estabelecimentos", "Socios"]:
+                if arq.startswith(tipo_prefix):
+                    # Extrai o índice numérico do arquivo (ex: Empresas3.zip → 3)
+                    stem = arq[len(tipo_prefix) :].replace(".zip", "")
+                    if stem.isdigit() and int(stem) >= slices:
+                        break
+            else:
+                resultado.append(arq)
+                continue
+            continue  # índice >= slices → ignorar
+
+        resultado.append(arq)
+
+    return resultado
+
 
 def _competencias_no_intervalo(start: str, end: str) -> list[str]:
     """Retorna lista de competências YYYY-MM entre start e end (inclusive)."""
+
     def _to_ym(s):
         y, m = s.split("-")
         return int(y), int(m)
@@ -152,6 +204,32 @@ class Command(BaseCommand):
             metavar="ARQUIVO",
             help="Baixa apenas os arquivos especificados (ex: Cnaes.zip Simples.zip)",
         )
+        # ── Modo Lite ──────────────────────────────────────────────────────
+        parser.add_argument(
+            "--slices",
+            type=int,
+            default=None,
+            metavar="N",
+            help=(
+                "Baixa apenas os N primeiros ZIPs de cada tipo particionado "
+                "(Empresas, Estabelecimentos, Socios). Range: 1-10. "
+                "Exemplo: --slices 1 baixa ~10%% dos cadastros."
+            ),
+        )
+        parser.add_argument(
+            "--skip-tables",
+            nargs="+",
+            default=[],
+            choices=["empresa", "estabelecimento", "socio", "simples"],
+            metavar="TIPO",
+            help="Ignora os arquivos dos tipos informados. Ex: --skip-tables simples socio",
+        )
+        parser.add_argument(
+            "--lite",
+            action="store_true",
+            default=False,
+            help="Atalho para --slices 1 --skip-tables simples (mínimo para testes)",
+        )
 
     def handle(self, *args, **options):
         data_dir: Path = getattr(settings, "CNPJ_DATA_DIR", Path("data/raw"))
@@ -166,11 +244,36 @@ class Command(BaseCommand):
             except ValueError as exc:
                 raise CommandError(f"Intervalo inválido: {exc}") from exc
 
-        arquivos = options["files"] if options["files"] else ALL_FILES
+        # ── Modo Lite ──────────────────────────────────────────────────────
+        slices = options.get("slices")
+        skip_tables: list[str] = options.get("skip_tables") or []
+
+        if options.get("lite"):
+            slices = slices or 1
+            if "simples" not in skip_tables:
+                skip_tables = list(skip_tables) + ["simples"]
+
+        if slices is not None and not (1 <= slices <= 10):
+            raise CommandError("--slices deve ser um valor entre 1 e 10.")
+
+        if options["files"]:
+            arquivos = options["files"]
+        else:
+            arquivos = _filtrar_arquivos(ALL_FILES, slices, skip_tables)
+
+        modo_info = ""
+        if slices is not None or skip_tables:
+            partes = []
+            if slices is not None:
+                partes.append(f"slices={slices}/10")
+            if skip_tables:
+                partes.append(f"skip={','.join(skip_tables)}")
+            modo_info = f"  🔹 MODO LITE ({' | '.join(partes)})\n"
 
         self.stdout.write(
             self.style.SUCCESS(
                 f"\n{'='*60}\n"
+                f"{modo_info}"
                 f"  Download CNPJ RF — {len(competencias)} competência(s)\n"
                 f"  Arquivos por competência: {len(arquivos)}\n"
                 f"  Total de downloads: {len(competencias) * len(arquivos)}\n"
@@ -187,9 +290,7 @@ class Command(BaseCommand):
             logger = logging.getLogger(f"download.{competencia}")
             if not logger.handlers:
                 handler = logging.FileHandler(log_path, encoding="utf-8")
-                handler.setFormatter(
-                    logging.Formatter("%(asctime)s %(levelname)s %(message)s")
-                )
+                handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
                 logger.addHandler(handler)
                 logger.setLevel(logging.DEBUG)
 

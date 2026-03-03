@@ -28,3 +28,17 @@ Arquivos brutos baixados não podem ser colocados num banco SQL impunemente devi
        - Substituí valores inexistentes do pandas (`NaN`) pela literal Python `None`.
     4. Usa Injeção `COPY from stdin`. O Psycopg2 recebe os pedaços tratados e despeja sem travas de parser ANSI-SQL no postgresquel. Essa abordagem é mais de 50x mais rápida do que Bulk Inserts tradicionais com queries preparadas.
     5. No fim das consolidações das dez particões (`Empresas0.zip` até `Empresas9.zip`), é registrado o resultado em uma tabela de Auditoria em tela chamada de `Log de Cargas` (`cnpj_carga_log`).
+
+## Fase 3: Sincronização do Motor de Busca (Elasticsearch)
+
+Como o PostgreSQL com B-Trees garante a consistência, o Elasticsearch assume na ponta para consultas Fuzzys e Full-Text ultrarrápidas, processado de forma distribuída para não estourar a memória (JVM Heap limits).
+
+* **Comando:** `python manage.py index_es --workers 4`
+* **O Fluxo passo a passo:**
+    1. Lê a listagem completa de CNPJs básicos inseridos no relacional.
+    2. Envia blocos de `CHUNK_SIZE` (padrão 150.000) divididos entre N *Workers* mapeados pela `ProcessPoolExecutor`.
+    3. Cada subprocesso cruza Dados Pessoais vs. Endereço e monta o Documento no Elasticsearch usando `bulk()`.
+    4. Esse paralelismo drástico cai o index delay de horas para meros minutos.
+
+> [!TIP] Demostração e Portfólio Rapido
+> Devido ao tamanho das importações completas, o projeto agora expõe as *flags* `--lite`. Ao emendar um comando `make load-lite` na plataforma, o backend baixa imediatamente apenas os zips minúsculos (Simples, Cnae) e 1 amostra da base Societária. Pulando gargalos e colocando o Painel com milhares de buscas prontas em < 2 minutos!

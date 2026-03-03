@@ -18,26 +18,49 @@
 
   <style>
     :root {
-      /* Paleta moderna corporativa Premium (Inspirado no Tailwind Slate/Zinc/Indigo) */
-      --primary: #4f46e5;
-      /* Indigo 600 */
-      --primary-dark: #3730a3;
-      /* Indigo 800 */
-      --accent: #38bdf8;
-      /* Sky 400 */
+      /* Paleta dark navy suave — inspirada no screenshot de referência */
+      --primary: #2563eb;
+      /* Blue 600 */
+      --primary-dark: #1d4ed8;
+      /* Blue 700 */
+      --accent: #60a5fa;
+      /* Blue 400 — azul mais claro */
       --success: #34d399;
       /* Emerald 400 */
       --danger: #fb7185;
       /* Rose 400 */
       --warning: #fbbf24;
       /* Amber 400 */
-      --bg-dark: #09090b;
-      /* Zinc 950 (Fundo principal ultra-dark) */
-      --bg-card: #18181b;
-      /* Zinc 900 (Cards) */
-      --text-muted-custom: #a1a1aa;
-      /* Zinc 400 */
-      --border-subtle: rgba(255, 255, 255, 0.06);
+      --bg-dark: #0f172a;
+      /* Slate 900 — navy suave, não preto puro */
+      --bg-card: #1e293b;
+      /* Slate 800 — cards mais claros */
+      --text-muted-custom: #94a3b8;
+      /* Slate 400 — texto secundário bem legível */
+      --border-subtle: rgba(148, 163, 184, 0.12);
+      /* Slate com mais visibilidade */
+    }
+
+    /* OVERRIDE Bootstrap text-muted para tema dark */
+    .text-muted {
+      color: var(--text-muted-custom) !important;
+    }
+
+    /* OVERRIDE Bootstrap btn-outline-secondary para tema dark */
+    .btn-outline-secondary {
+      color: #cbd5e1;
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-outline-secondary:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.3);
+      color: #f1f5f9;
+    }
+
+    /* OVERRIDE Bootstrap btn-link para tema dark */
+    .btn-link.text-secondary {
+      color: var(--text-muted-custom) !important;
     }
 
     * {
@@ -54,11 +77,11 @@
 
     /* NAVBAR */
     .navbar-custom {
-      background: rgba(9, 9, 11, 0.85);
-      /* Fundo navbar blur translúcido */
+      background: rgba(15, 23, 42, 0.88);
+      /* Navy suave translúcido */
       backdrop-filter: blur(16px);
       border-bottom: 1px solid var(--border-subtle);
-      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.8);
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
     }
 
     .navbar-brand {
@@ -79,7 +102,7 @@
       font-size: 0.9rem;
       color: white;
       margin-right: 12px;
-      box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+      box-shadow: 0 0 14px rgba(96, 165, 250, 0.45);
     }
 
     /* CARDS */
@@ -277,8 +300,8 @@
 
     /* STAT CARD */
     .stat-card {
-      background: linear-gradient(135deg, rgba(26, 86, 219, 0.15), rgba(14, 165, 233, 0.08));
-      border: 1px solid rgba(26, 86, 219, 0.2);
+      background: linear-gradient(135deg, rgba(37, 99, 235, 0.18), rgba(96, 165, 250, 0.08));
+      border: 1px solid rgba(96, 165, 250, 0.18);
       border-radius: 12px;
       padding: 1.5rem;
       transition: all 0.2s;
@@ -286,7 +309,7 @@
 
     .stat-card:hover {
       transform: translateY(-2px);
-      box-shadow: 0 8px 32px rgba(26, 86, 219, 0.2);
+      box-shadow: 0 8px 32px rgba(37, 99, 235, 0.25);
     }
 
     .stat-number {
@@ -369,8 +392,9 @@
 
     /* HERO GRADIENT */
     .hero-gradient {
-      background: linear-gradient(135deg, rgba(26, 86, 219, 0.08) 0%, rgba(14, 165, 233, 0.04) 100%);
-      border-bottom: 1px solid var(--border-subtle);
+      background: linear-gradient(160deg, #1e3a6e 0%, #0f172a 60%);
+      /* Navy blue sólido — exatamente como o screenshot */
+      border-bottom: 1px solid rgba(96, 165, 250, 0.15);
       padding: 2rem 0;
     }
   </style>

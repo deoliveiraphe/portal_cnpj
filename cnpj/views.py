@@ -7,22 +7,29 @@ Endpoints:
   GET /api/busca/               — busca com filtros + paginação
   GET /api/cnpj/<cnpj_basico>/  — detalhe completo de empresa
 """
-import json
+
 import time
+
 from django.http import JsonResponse
-from django.views.decorators.http import require_GET
 from django.views.decorators.cache import cache_page
-from django.db.models import Count, Q, Exists, OuterRef
-from django.core.paginator import Paginator
+from django.views.decorators.http import require_GET
 
 from .models import (
-    Empresa, Estabelecimento, Socio, Simples,
-    Cnae, Municipio, Natureza, Qualificacao, CargaLog,
+    CargaLog,
+    Cnae,
+    Empresa,
+    Estabelecimento,
+    Municipio,
+    Natureza,
+    Qualificacao,
+    Simples,
+    Socio,
 )
 
 PAGE_SIZE = 25
 
 # ── helpers ────────────────────────────────────────────────────────────────
+
 
 def _fmt_date(d):
     """Date → DD/MM/AAAA ou ''."""
@@ -90,6 +97,7 @@ def _format_cnpj(basico, ordem="0001", dv="00"):
 
 # ── endpoints ──────────────────────────────────────────────────────────────
 
+
 @require_GET
 @cache_page(60 * 60 * 24)
 def api_stats(request):
@@ -99,17 +107,17 @@ def api_stats(request):
         reverse=True,
     )
     ultima = competencias[0] if competencias else None
-    total_empresas = (
-        Estabelecimento.objects.filter(competencia=ultima).count() if ultima else 0
-    )
+    total_empresas = Estabelecimento.objects.filter(competencia=ultima).count() if ultima else 0
     cargas_ok = CargaLog.objects.filter(status="SUCESSO").count()
 
-    return JsonResponse({
-        "total_empresas": total_empresas,
-        "total_competencias": len(competencias),
-        "ultima_competencia": ultima,
-        "cargas_concluidas": cargas_ok,
-    })
+    return JsonResponse(
+        {
+            "total_empresas": total_empresas,
+            "total_competencias": len(competencias),
+            "ultima_competencia": ultima,
+            "cargas_concluidas": cargas_ok,
+        }
+    )
 
 
 @require_GET
@@ -126,10 +134,10 @@ def api_competencias(request):
 @require_GET
 def api_busca(request):
     """
-    GET /api/busca/ — busca com filtros + paginação.
+    GET /api/busca/ — busca com filtros + paginação via Elasticsearch.
 
     Query params:
-      q            — razão social ou CNPJ (busca livre)
+      q            — razão social / nome fantasia / CNPJ (busca livre)
       competencia  — YYYY-MM (padrão: mais recente)
       uf           — sigla UF
       municipio    — código do município
@@ -140,122 +148,125 @@ def api_busca(request):
       mei          — S ou N
       page         — página (padrão: 1)
     """
+    from elasticsearch_dsl import Q as ESQ
+
+    from cnpj.documents import EstabelecimentoDocument
+
     t0 = time.time()
 
     competencia = request.GET.get("competencia") or _latest_competencia()
     if not competencia:
         return JsonResponse({"results": [], "total": 0, "paginas": 0}, status=200)
 
-    # Inicializa Busca do Elasticsearch
-    s = EstabelecimentoDocument.search()
-    
-    # Filtros exatos — usando Match (campos mapeados como text no índice atual)
-    must_queries = [Match(competencia=competencia)]
+    # ── Constrói query ES ─────────────────────────────────────────────────────
+    must = [ESQ("term", competencia=competencia)]
 
     q = request.GET.get("q", "").strip()
-    is_cnpj_search = False  # default — sobrescrito abaixo se houver termo de busca
     if q:
-        cnpj_limpo = ''.join(filter(str.isdigit, q))
-        is_cnpj_search = (cnpj_limpo and len(cnpj_limpo) >= 3 and cnpj_limpo == q.replace(".", "").replace("/", "").replace("-", "").strip())
-        
-        if is_cnpj_search:
-            must_queries.append(Prefix(cnpj_basico=cnpj_limpo[:8]))
+        cnpj_limpo = "".join(filter(str.isdigit, q))
+        is_cnpj = (
+            cnpj_limpo
+            and q.replace(".", "").replace("/", "").replace("-", "").strip() == cnpj_limpo
+        )
+        if is_cnpj:
+            must.append(ESQ("prefix", cnpj_basico=cnpj_limpo[:8]))
         else:
-            # MultiMatch Textual nos campos principais
-            must_queries.append(MultiMatch(
-                query=q, 
-                fields=['razao_social', 'nome_fantasia'],
-                type='best_fields',
-                operator='and'
-            ))
+            must.append(
+                ESQ(
+                    "multi_match",
+                    query=q,
+                    fields=["razao_social", "nome_fantasia"],
+                    type="best_fields",
+                    operator="and",
+                    fuzziness="AUTO",
+                )
+            )
 
     if uf := request.GET.get("uf", "").strip().upper():
-        must_queries.append(Match(uf=uf))
+        must.append(ESQ("term", uf=uf))
 
     if municipio := request.GET.get("municipio", "").strip():
-        must_queries.append(Match(municipio=municipio))
+        must.append(ESQ("term", municipio=municipio))
 
     if cnae := request.GET.get("cnae", "").strip():
-        must_queries.append(Prefix(cnae_fiscal_principal=cnae[:7]))
+        must.append(ESQ("prefix", cnae_fiscal_principal=cnae[:7]))
 
     if situacao := request.GET.get("situacao", "").strip():
-        must_queries.append(Match(situacao_cadastral=situacao))
+        must.append(ESQ("term", situacao_cadastral=situacao))
 
     if porte := request.GET.get("porte", "").strip():
-        must_queries.append(Match(porte=porte))
+        must.append(ESQ("term", porte=porte))
 
-    simples = request.GET.get("simples", "").strip().upper()
-    if simples in ("S", "N"):
-        # campo booleano indexado como bool — string 'true'/'false'
-        must_queries.append(Match(opcao_simples='true' if simples == 'S' else 'false'))
+    if (simples := request.GET.get("simples", "").strip().upper()) in ("S", "N"):
+        must.append(ESQ("term", opcao_simples=simples))
 
-    mei = request.GET.get("mei", "").strip().upper()
-    if mei in ("S", "N"):
-        must_queries.append(Match(opcao_mei='true' if mei == 'S' else 'false'))
+    if (mei := request.GET.get("mei", "").strip().upper()) in ("S", "N"):
+        must.append(ESQ("term", opcao_mei=mei))
 
-    # Aplica todas as condições `AND` conjuntas
-    s = s.query(Bool(must=must_queries))
-    
-    # Sem sort explícito — ES retorna por score de relevância (BM25), adequado para todos os casos
-
-    # Paginação NoSQL nativa do Elasticsearch (From / Size)
-    page = int(request.GET.get("page", 1))
+    # ── Paginação ─────────────────────────────────────────────────────────────
+    page = max(1, int(request.GET.get("page", 1)))
     start = (page - 1) * PAGE_SIZE
-    s = s[start:start + PAGE_SIZE]
 
-    # Dispara Query ao Cluster Elastic
-    print(f"Tempo pre query Elastic(): {time.time() - t0:.4f}s", flush=True)
-    response = s.execute()
+    s = EstabelecimentoDocument.search().query(ESQ("bool", must=must))[start : start + PAGE_SIZE]
+
+    try:
+        response = s.execute()
+    except Exception as exc:
+        return JsonResponse({"error": f"Erro no Elasticsearch: {exc}"}, status=503)
+
     total = response.hits.total.value
-    print(f"Tempo pos query Elastic(): {time.time() - t0:.4f}s", flush=True)
-    
-    # Paginator helper compatível com formato nativo da view
-    num_pages = (total + PAGE_SIZE - 1) // PAGE_SIZE
+    num_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
 
-    # Mapas de descrição a partir do resultado do Elasticsearch (Hit objects)
-    es_results = list(response)
-    
-    cnae_codigos = {e.cnae_fiscal_principal for e in es_results if hasattr(e, 'cnae_fiscal_principal') and e.cnae_fiscal_principal}
+    # ── Enriquece com descrições do PG ────────────────────────────────────────
+    hits = list(response)
+    cnae_codigos = {
+        h.cnae_fiscal_principal for h in hits if getattr(h, "cnae_fiscal_principal", None)
+    }
+    mun_codigos = {h.municipio for h in hits if getattr(h, "municipio", None)}
+
     cnae_map = dict(Cnae.objects.filter(codigo__in=cnae_codigos).values_list("codigo", "descricao"))
-    
-    mun_codigos = {e.municipio for e in es_results if hasattr(e, 'municipio') and e.municipio}
-    mun_map = dict(Municipio.objects.filter(codigo__in=mun_codigos).values_list("codigo", "descricao"))
+    mun_map = dict(
+        Municipio.objects.filter(codigo__in=mun_codigos).values_list("codigo", "descricao")
+    )
 
     results = []
-    for e in es_results:
-        # A view achatada do ES possui os dados do doc diretamente no nó raiz
-        cnae_desc = cnae_map.get(e.cnae_fiscal_principal, "") if hasattr(e, 'cnae_fiscal_principal') else ""
-        mun_desc = mun_map.get(e.municipio, "") if hasattr(e, 'municipio') else ""
-        
-        results.append({
-            "cnpj_basico": e.cnpj_basico if hasattr(e, 'cnpj_basico') else "",
-            "cnpj": _format_cnpj(
-                e.cnpj_basico if hasattr(e, 'cnpj_basico') else "", 
-                e.cnpj_ordem if hasattr(e, 'cnpj_ordem') else "", 
-                e.cnpj_dv if hasattr(e, 'cnpj_dv') else ""
-            ),
-            "razao_social": getattr(e, 'razao_social', ""),
-            "nome_fantasia": getattr(e, 'nome_fantasia', ""),
-            "situacao": SITUACAO_LABEL.get(getattr(e, 'situacao_cadastral', ""), getattr(e, 'situacao_cadastral', "")),
-            "situacao_codigo": getattr(e, 'situacao_cadastral', ""),
-            "municipio": mun_desc,
-            "municipio_codigo": getattr(e, 'municipio', ""),
-            "uf": getattr(e, 'uf', ""),
-            "cnae_principal": getattr(e, 'cnae_fiscal_principal', ""),
-            "cnae_descricao": cnae_desc,
-            "porte": PORTE_LABEL.get(getattr(e, 'porte', ""), ""),
-        })
+    for h in hits:
+        cnpj_b = getattr(h, "cnpj_basico", "")
+        cnpj_o = getattr(h, "cnpj_ordem", "")
+        cnpj_d = getattr(h, "cnpj_dv", "")
+        sit = getattr(h, "situacao_cadastral", "")
+        por = getattr(h, "porte", "")
+        cnae_c = getattr(h, "cnae_fiscal_principal", "")
+        mun_c = getattr(h, "municipio", "")
+
+        results.append(
+            {
+                "cnpj_basico": cnpj_b,
+                "cnpj": _format_cnpj(cnpj_b, cnpj_o, cnpj_d),
+                "razao_social": getattr(h, "razao_social", ""),
+                "nome_fantasia": getattr(h, "nome_fantasia", ""),
+                "situacao": SITUACAO_LABEL.get(sit, sit),
+                "situacao_codigo": sit,
+                "municipio": mun_map.get(mun_c, ""),
+                "municipio_codigo": mun_c,
+                "uf": getattr(h, "uf", ""),
+                "cnae_principal": cnae_c,
+                "cnae_descricao": cnae_map.get(cnae_c, ""),
+                "porte": PORTE_LABEL.get(por, ""),
+            }
+        )
 
     elapsed = round(time.time() - t0, 3)
-    print(f"Tempo TOTAL view: {elapsed}s", flush=True)
-    return JsonResponse({
-        "results": results,
-        "total": total,
-        "pagina": page,
-        "paginas": num_pages,
-        "competencia": competencia,
-        "elapsed": elapsed,
-    })
+    return JsonResponse(
+        {
+            "results": results,
+            "total": total,
+            "pagina": page,
+            "paginas": num_pages,
+            "competencia": competencia,
+            "elapsed": elapsed,
+        }
+    )
 
 
 @require_GET
@@ -281,16 +292,16 @@ def api_cnpj_detalhe(request, cnpj_basico):
         )
     except Estabelecimento.DoesNotExist:
         # Fallback: qualquer estab deste CNPJ
-        estab = Estabelecimento.objects.filter(
-            cnpj_basico=cnpj_basico, competencia=competencia
-        ).order_by("cnpj_ordem").first()
+        estab = (
+            Estabelecimento.objects.filter(cnpj_basico=cnpj_basico, competencia=competencia)
+            .order_by("cnpj_ordem")
+            .first()
+        )
         if not estab:
             return JsonResponse({"error": "CNPJ não encontrado."}, status=404)
 
     # Empresa
-    empresa = Empresa.objects.filter(
-        cnpj_basico=cnpj_basico, competencia=competencia
-    ).first()
+    empresa = Empresa.objects.filter(cnpj_basico=cnpj_basico, competencia=competencia).first()
 
     # Sócios
     socios_qs = Socio.objects.filter(cnpj_basico=cnpj_basico, competencia=competencia)
@@ -299,24 +310,28 @@ def api_cnpj_detalhe(request, cnpj_basico):
 
     socios = []
     for s in socios_qs:
-        socios.append({
-            "nome": s.nome_socio or "",
-            "tipo": IDENTIFICADOR_SOCIO_LABEL.get(s.identificador_socio or "", "PF"),
-            "cpfCnpj": s.cnpj_cpf_socio or "",
-            "qualificacao": qual_map.get(s.qualificacao_socio or "", s.qualificacao_socio or ""),
-            "dataEntrada": _fmt_date(s.data_entrada_sociedade),
-            "faixaEtaria": FAIXA_ETARIA_LABEL.get(s.faixa_etaria or "", ""),
-            "representanteLegal": {
-                "nome": s.nome_representante or "",
-                "cpf": s.representante_legal or "",
-                "qualificacao": qual_map.get(s.qualificacao_representante or "", ""),
-            } if s.representante_legal else None,
-        })
+        socios.append(
+            {
+                "nome": s.nome_socio or "",
+                "tipo": IDENTIFICADOR_SOCIO_LABEL.get(s.identificador_socio or "", "PF"),
+                "cpfCnpj": s.cnpj_cpf_socio or "",
+                "qualificacao": qual_map.get(
+                    s.qualificacao_socio or "", s.qualificacao_socio or ""
+                ),
+                "dataEntrada": _fmt_date(s.data_entrada_sociedade),
+                "faixaEtaria": FAIXA_ETARIA_LABEL.get(s.faixa_etaria or "", ""),
+                "representanteLegal": {
+                    "nome": s.nome_representante or "",
+                    "cpf": s.representante_legal or "",
+                    "qualificacao": qual_map.get(s.qualificacao_representante or "", ""),
+                }
+                if s.representante_legal
+                else None,
+            }
+        )
 
     # Simples / MEI
-    simples_obj = Simples.objects.filter(
-        cnpj_basico=cnpj_basico, competencia=competencia
-    ).first()
+    simples_obj = Simples.objects.filter(cnpj_basico=cnpj_basico, competencia=competencia).first()
 
     # CNAEs
     cnae_map = dict(Cnae.objects.values_list("codigo", "descricao"))
@@ -328,10 +343,12 @@ def api_cnpj_detalhe(request, cnpj_basico):
         for cod in estab.cnae_fiscal_secundaria.replace(",", " ").split():
             cod = cod.strip().zfill(7)
             if cod:
-                cnae_secundarios.append({
-                    "codigo": cod,
-                    "descricao": cnae_map.get(cod, ""),
-                })
+                cnae_secundarios.append(
+                    {
+                        "codigo": cod,
+                        "descricao": cnae_map.get(cod, ""),
+                    }
+                )
 
     # Município
     mun_map = dict(Municipio.objects.values_list("codigo", "descricao"))
@@ -344,56 +361,61 @@ def api_cnpj_detalhe(request, cnpj_basico):
     # Competências disponíveis
     competencias_disponiveis = sorted(
         Estabelecimento.objects.filter(cnpj_basico=cnpj_basico)
-        .values_list("competencia", flat=True).distinct(),
+        .values_list("competencia", flat=True)
+        .distinct(),
         reverse=True,
     )
 
-    return JsonResponse({
-        "cnpj_basico": cnpj_basico,
-        "cnpj": _format_cnpj(estab.cnpj_basico, estab.cnpj_ordem, estab.cnpj_dv),
-        "competencia": competencia,
-        "competencias_disponiveis": list(competencias_disponiveis),
-
-        "razao_social": empresa.razao_social if empresa else "",
-        "nome_fantasia": estab.nome_fantasia or "",
-        "situacao": SITUACAO_LABEL.get(estab.situacao_cadastral or "", estab.situacao_cadastral or ""),
-        "situacao_codigo": estab.situacao_cadastral or "",
-        "data_situacao": _fmt_date(estab.data_situacao_cadastral),
-        "data_abertura": _fmt_date(estab.data_inicio_atividade),
-        "natureza_juridica": f"{empresa.natureza_juridica} - {nat_desc}" if empresa and nat_desc else (empresa.natureza_juridica if empresa else ""),
-        "porte": PORTE_LABEL.get(empresa.porte if empresa else "", ""),
-        "capital_social": empresa.capital_social if empresa else "",
-        "qualificacao_responsavel": qual_resp_desc,
-        "ente_federativo": empresa.ente_federativo_responsavel if empresa else "",
-
-        "cnae_principal": {"codigo": cnae_principal, "descricao": cnae_principal_desc},
-        "cnaes_secundarios": cnae_secundarios,
-
-        "endereco": {
-            "logradouro": f"{estab.tipo_logradouro or ''} {estab.logradouro or ''}".strip(),
-            "numero": estab.numero or "",
-            "complemento": estab.complemento or "",
-            "bairro": estab.bairro or "",
-            "municipio": municipio_desc,
-            "municipio_codigo": estab.municipio or "",
-            "uf": estab.uf or "",
-            "cep": estab.cep or "",
-        },
-
-        "telefone": f"({estab.ddd1}) {estab.telefone1}" if estab.ddd1 and estab.telefone1 else "",
-        "email": estab.correio_eletronico or "",
-        "situacao_especial": estab.situacao_especial or "",
-
-        "simples_nacional": {
-            "optante": (simples_obj.opcao_simples or "") == "S" if simples_obj else False,
-            "data_opcao": _fmt_date(simples_obj.data_opcao_simples) if simples_obj else "",
-            "data_exclusao": _fmt_date(simples_obj.data_exclusao_simples) if simples_obj else "",
-        },
-        "mei": {
-            "optante": (simples_obj.opcao_mei or "") == "S" if simples_obj else False,
-            "data_opcao": _fmt_date(simples_obj.data_opcao_mei) if simples_obj else "",
-            "data_exclusao": _fmt_date(simples_obj.data_exclusao_mei) if simples_obj else "",
-        },
-
-        "socios": socios,
-    })
+    return JsonResponse(
+        {
+            "cnpj_basico": cnpj_basico,
+            "cnpj": _format_cnpj(estab.cnpj_basico, estab.cnpj_ordem, estab.cnpj_dv),
+            "competencia": competencia,
+            "competencias_disponiveis": list(competencias_disponiveis),
+            "razao_social": empresa.razao_social if empresa else "",
+            "nome_fantasia": estab.nome_fantasia or "",
+            "situacao": SITUACAO_LABEL.get(
+                estab.situacao_cadastral or "", estab.situacao_cadastral or ""
+            ),
+            "situacao_codigo": estab.situacao_cadastral or "",
+            "data_situacao": _fmt_date(estab.data_situacao_cadastral),
+            "data_abertura": _fmt_date(estab.data_inicio_atividade),
+            "natureza_juridica": f"{empresa.natureza_juridica} - {nat_desc}"
+            if empresa and nat_desc
+            else (empresa.natureza_juridica if empresa else ""),
+            "porte": PORTE_LABEL.get(empresa.porte if empresa else "", ""),
+            "capital_social": empresa.capital_social if empresa else "",
+            "qualificacao_responsavel": qual_resp_desc,
+            "ente_federativo": empresa.ente_federativo_responsavel if empresa else "",
+            "cnae_principal": {"codigo": cnae_principal, "descricao": cnae_principal_desc},
+            "cnaes_secundarios": cnae_secundarios,
+            "endereco": {
+                "logradouro": f"{estab.tipo_logradouro or ''} {estab.logradouro or ''}".strip(),
+                "numero": estab.numero or "",
+                "complemento": estab.complemento or "",
+                "bairro": estab.bairro or "",
+                "municipio": municipio_desc,
+                "municipio_codigo": estab.municipio or "",
+                "uf": estab.uf or "",
+                "cep": estab.cep or "",
+            },
+            "telefone": f"({estab.ddd1}) {estab.telefone1}"
+            if estab.ddd1 and estab.telefone1
+            else "",
+            "email": estab.correio_eletronico or "",
+            "situacao_especial": estab.situacao_especial or "",
+            "simples_nacional": {
+                "optante": (simples_obj.opcao_simples or "") == "S" if simples_obj else False,
+                "data_opcao": _fmt_date(simples_obj.data_opcao_simples) if simples_obj else "",
+                "data_exclusao": _fmt_date(simples_obj.data_exclusao_simples)
+                if simples_obj
+                else "",
+            },
+            "mei": {
+                "optante": (simples_obj.opcao_mei or "") == "S" if simples_obj else False,
+                "data_opcao": _fmt_date(simples_obj.data_opcao_mei) if simples_obj else "",
+                "data_exclusao": _fmt_date(simples_obj.data_exclusao_mei) if simples_obj else "",
+            },
+            "socios": socios,
+        }
+    )

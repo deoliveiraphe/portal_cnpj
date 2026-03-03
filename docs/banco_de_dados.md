@@ -56,5 +56,11 @@ erDiagram
     EMPRESA ||--o| SIMPLES : "CNPJ Básico igual"
 ```
 
-> [!NOTE]
-> Observe no mapa relacional acima que **não existem `ForeignKeys`** físicas na base em colunas chaves (apenas indexações B-tree). Evitamos FKs reais para anular qualquer impacto de travamento (Locks) de cascata ao rodar operações de limpeza de `CASCADE constraints` durante os ETLs. A junção dessas chaves nas visualizações de tela é realizada abstraindo o número do `CNPJ Básico` do registro em runtime no ORM.
+> [!TIP]
+> Observe no mapa relacional acima que **não existem `ForeignKeys`** físicas na base em colunas chaves (apenas indexações B-tree). Evitamos FKs reais para anular qualquer impacto de travamento (Locks) ao rodar operações de limpeza de `CASCADE constraints`. As junções são tratadas puramente em app-level pelo Motor Backend.
+
+### Índice de Pesquisa (Elasticsearch)
+
+Paralelamente à modelagem de domínio SQL, a base implementa suporte direto à indexação invertida dos clusters principais ("Empresa + Estabelecimento"). 
+
+> Elasticsearch armazena uma cópia minimalista desnormalizada contendo a "Competência", o "CNPJ (Base, Ordem e DV)" e Nomes Completos para `fuzzy finding`. A query DSL busca as referências instantaneamente em RAM durante o comando e resgata do PostgreSQL apenas os IDs extraídos.

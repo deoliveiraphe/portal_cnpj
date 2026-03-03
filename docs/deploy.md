@@ -26,18 +26,30 @@ Ao invés de consumir disco primário do DB atoa, mantemos mapeamentos locais fl
 ### Visualizando os Módulos do Ambiente
 
 Assumindo instâncias expostas na rota base padrão `localhost`: 
+* **`http://localhost:8000/api/docs/`**: Documentação interativa Swagger (Redoc).
 * **`http://localhost:8000/api/...`**: Rotas da API e Endpoints.
-* **`http://localhost:8080/`**: Ambiente de monitoramento Front-end (caso o `Vite/Node` via pasta `./frontend` esteja rodando em dev-mode de porta via script npm).
 * **`http://localhost:8081/`**: Ambiente gerêncial web de SQL (Container Adminer do Postgres). Evite em produção s/ Firewalls pesados de controle.
+* **`http://localhost:9200/`**: Motor de Busca Elasticsearch rodando no Backend.
 
-### Comandos da rotina do Sysadmin
+### Facilidades e Comandos (Makefile)
 
-Como todos os utilitários estão embarcados no conteiner do projeto Django propriamente dito, suas chamadas cron job via crontab nativo do linux só devem atachar `exec` através do CLI do Docker na stack ativa `cnpj_django`:
+O projeto moderno injeta utilitários via `Makefile` nativo do Linux/Mac, encurtando comandos complexos do Docker e Django.
 
+Para visualizar todos os atalhos disponíveis, rode na raiz do repositório:
 ```bash
-# Apagar dados de Cargas mal consolidadas no final de semana, p/ exemplificar
-docker compose exec django python manage.py truncate_cnpj
-
-# Disparar atualizador manual de rotina temporal e substituir histórico desatualizado com flag '--replace'
-docker compose exec django python manage.py load_cnpj --start 2026-05 --end 2026-05 --replace
+make help
 ```
+
+#### Testes Rápidos Locais (Aprovação Rápida)
+Quer colocar todo o sistema de pé, baixar e processar e indexar uma carga rápida no Elasticsearch sem ficar horas processando o Brasil inteiro? Basta construir o docker e chamar o atalho Lite:
+```bash
+make build
+make up
+make load-lite
+```
+
+#### Outros Atalhos Importantes
+- `make logs`: Acompanha a saída de todos os containers (Django, DB, ES)
+- `make test`: Roda a bateria de automação (Pytest) simulando a API 
+- `make shell`: Interage via `IPython` com as models do sistema
+- `make lint` e `make format`: Executa o Ruff (Linter em Rust) auto-corrigindo sua formatação.

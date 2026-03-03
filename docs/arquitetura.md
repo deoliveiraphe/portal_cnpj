@@ -21,18 +21,21 @@ graph TD;
     API_CONSUMER[Consumidor Terceiro] <-->|Rest API| APP
 ```
 
-## Por que não usaram Elasticsearch?
+## O Motor de Busca (Elasticsearch)
 
-No início do projeto, havia código esboçado para manter uma sincronização dupla: base relacional no Postgres e índice textual no Elasticsearch-DSL para melhorar a busca de "Razão Social" / "Nome Fantasia". 
+Para garantir uma barreira de busca incrivelmente rápida e tolerante a erros de grafia (fuzzy matching) sobre uma base de 60 milhões de registros, o Portal adota um padrão de sincronia híbrida:
 
-Isso foi refatorado e **removido** pelos seguintes motivos arquiteturais:
-1. **Redundância:** O ganho na latência de busca (ms) perante os índices do Postgres não cobria a complexidade extra de ter que popular 200 milhões de registros em dois bancos distintos.
-2. **Custo Operacional e Memória RAM:** Um contêiner Elastic consome na ordem de Gigabytes sem ajustes drásticos. Retirar esse serviço economizou quase `2.5 GB` de memória RAM permitindo que o sistema rodasse polido em provedores menores (Cloud tipo VPS simples).
-3. **Efetividade dos Índices no Postgres:** A criação de chaves B-Tree adequadas nas tabelas de `Estabelecimento` e `Empresas` e buscas de cruzamentos (subqueries `__in`) pelo Django entregaram pesquisas abaixo de 100ms consistentemente, tornando o Search Engine impraticável sob a ótica de custo/benefício.
+1. **PostgreSQL** atua como banco primário. Retém as cargas brutas de CSV, as chaves de particionamento e todas as amarrações do negócio (Socios, Endereços, Matriz/Filial).
+2. **Elasticsearch (8.x)** atua como Engine de Pesquisa focada. Recebe blocos mastigados via workers paralelos contendo as chaves vitais de Razão Social e Fantasia.
+
+> [!TIP]
+> Essa separação permite que o buscador faça queries `match` ricas textualmente num índice raso `(CNPJ, Nomes)` retornando em `15ms`. O Backend recebe essa lista de CNPJs básicos e então extrai o resto do painel estruturado completo do Postgre de uma vez através de chaves exatas `__in`.
 
 ## O stack final:
 - **Linguagem Principal**: Python 3.11+.
 - **Database**: PostgreSQL 15, rodando orquestrado localmente.
-- **Framework Web**: Django 4.2. Usado tanto para expor a rota de comandos de terminal (management commands customizados) quanto o servidor WSGI (Gunicorn).
-- **Frontend Core**: Bootstrap 5 Vanilla provendo responsividade cross-device e views de tabelas ricas, complementados pelo Chart.js na evolução histórica.
-- **Data Engineering**: Processamento dos blocos fragmentados com a interface em matriz de Dataframes (via biblioteca `pandas`).
+- **Search Engine**: Elasticsearch 8.x, acessado via `elasticsearch-dsl`.
+- **Framework Web**: Django 4.2. (FBVs, ORM e WSGI).
+- **Código Front**: Bootstrap 5 Vanilla + interatividade do Swagger para rotas de API.
+- **Qualidade & Automação**: Formatters em Rust (Ruff), Unit Tests no pytest, automação por Makefile.
+- **Data Engineering**: Processamento distribuído com `ProcessPoolExecutor`, otimizando memória via chunks.

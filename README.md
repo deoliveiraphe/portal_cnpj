@@ -1,210 +1,220 @@
 # Portal de Dados Abertos CNPJ — Receita Federal do Brasil
 
-Portal de consulta ao Cadastro Nacional de Pessoas Jurídicas (CNPJ) com pipeline completo de download, processamento ETL e interface web moderna.
+Portal de consulta ao Cadastro Nacional de Pessoas Jurídicas (CNPJ) oferecendo uma solução completa: pipeline de download da RFB, processamento ETL paralelo robusto (PostgreSQL) e busca textual rápida (Elasticsearch). Acompanha interface web moderna (dark navy) e API RESTful.
 
-## Arquitetura
+---
 
-```
+## 🏗️ Arquitetura
+
+O sistema emprega uma arquitetura baseada em contêineres e banco de dados relacional para persistência master, utilizando um motor de busca secundário para pesquisas rápidas.
+
+```text
 ┌─────────────────────────────────────────────┐
 │              Docker Compose                 │
 │                                             │
 │  ┌──────────┐  ┌──────────┐  ┌───────────┐  │
 │  │ postgres │  │  django  │  │  adminer  │  │
-│  │  :5432   │  │  :8000   │  │   :8080   │  │
+│  │  :5432   │  │  :8000   │  │   :8081   │  │
 │  └──────────┘  └──────────┘  └───────────┘  │
 │                                             │
-│  Volumes: pgdata, ./data, ./logs            │
+│  ┌──────────────────┐                       │
+│  │ elasticsearch    │                       │
+│  │      :9200       │                       │
+│  └──────────────────┘                       │
+│                                             │
+│  Volumes: pgdata, esdata, ./data, ./logs    │
 └─────────────────────────────────────────────┘
-
-Receita Federal → download_cnpj.py → data/raw/YYYY-MM/*.zip
-                                          ↓
-data/raw/YYYY-MM/*.zip → load_cnpj.py  → PostgreSQL 15
-                                          ↓
-                               Django ORM → Templates Bootstrap 5
 ```
 
-## Tecnologias
+### O Pipeline (ETL)
+
+1. **Download**: Receita Federal → `download_cnpj.py` → `data/raw/YYYY-MM/*.zip`
+2. **Carga**: `data/raw/YYYY-MM/*.zip` → `load_cnpj.py` (Workers Paralelos) → **PostgreSQL 15**
+3. **Indexação**: PostgreSQL 15 → `index_es.py` (Bulk) → **Elasticsearch 8**
+4. **Consulta**: Django `api_busca` → Frontend / API REST
+
+### Tecnologias
 
 | Camada | Tecnologia |
 |--------|-----------|
-| Backend | Django 4.2 + Django ORM |
-| Banco | PostgreSQL 15 |
-| ETL | Python + pandas + psycopg2 COPY |
-| Download | requests + tqdm |
-| Frontend | Bootstrap 5 + Chart.js |
-| Infra | Docker Compose |
+| **Backend** | Django 4.2 |
+| **Banco Relacional** | PostgreSQL 15 |
+| **Busca Textual** | Elasticsearch 8 + `django-elasticsearch-dsl` |
+| **ETL (Carga)** | Python + pandas + psycopg2 (`COPY`) + `ProcessPoolExecutor` |
+| **ETL (Indexação)**| `elasticsearch-py` `bulk()` + Cursor Raw Django |
+| **Extração** | `requests` + `tqdm` |
+| **Frontend** | Bootstrap 5 + Chart.js |
+| **Infraestrutura**| Docker Compose |
 
-## Pré-requisitos
+---
+
+## 🚀 Pré-requisitos
 
 - Docker e Docker Compose v2+
-- **200 GB de disco** para base completa (14 competências × ~40 arquivos)
-- Conexão internet para download dos dados da Receita Federal
+- **Disco**: 
+  - `~80–100 GB` para base completa (1 competência inteira).
+  - `~3–5 GB` no **Modo Lite** (ideal para testes ou ambientes limitados).
+- Internet estável para o download de dados da Receita Federal.
 
-## Início rápido
+---
 
-### 1. Clone e configure
+## 🛠️ Guia de Instalação e Uso
+
+### 1. Preparando o Ambiente
+
+Clone o repositório, configure as variáveis de ambiente baseadas no exemplo e inicie os contêineres em *background*:
 
 ```bash
-git clone <repo> mihos
-cd mihos
+git clone <repo> portal_cnpj
+cd portal_cnpj
 cp .env.example .env
-# Edite .env conforme necessário
-```
 
-### 2. Suba os containers
-
-```bash
 docker compose up -d
 ```
+Aguarde alguns instantes para o banco de dados inicializar e as migrações do Django ocorrerem de forma automática.
 
-Aguarde os containers ficarem saudáveis (postgres + migrate acontecem automaticamente).
+### 2. O Pipeline de Dados
 
-### 3. Faça o download dos dados
+Para popular o portal, você executará as 3 etapas essenciais do pipeline. Caso seja seu primeiro uso ou você esteja apenas testando localmente, **recomendamos iniciar pelo Modo Lite**.
 
-```bash
-# Baixa apenas a competência mais recente (recomendado para teste)
-docker compose exec django python manage.py download_cnpj --only-latest
+> 💡 **MODO LITE**: O projeto oferece suporte a um modo econômico, perfeito para testes locais limitados de espaço. Use as flags `--lite` ao rodar os comandos para baixar/processar apenas cerca de ~10% dos dados.
 
-# Baixa o intervalo completo 2025-01 → 2026-01 (pode levar horas!)
-docker compose exec django python manage.py download_cnpj --start 2025-01 --end 2026-01
+#### Etapa A: Download dos Arquivos
 
-# Baixa uma competência específica
-docker compose exec django python manage.py download_cnpj --start 2025-06 --end 2025-06
-```
-
-### 4. Carregue os dados no banco
+Baixe os dados processados publicamente pela Receita Federal.
 
 ```bash
-# Carrega uma competência
-docker compose exec django python manage.py load_cnpj --competencia 2025-06
+# Baixa apenas os dados mais recentes (Mês Atual/Anterior)
+# Adicione --lite para um download super rápido (Testes)
+docker compose exec django python manage.py download_cnpj --only-latest --lite
 
-# Carrega todas as competências disponíveis em data/raw/
-docker compose exec django python manage.py load_cnpj --all
-
-# Recarrega substituindo dados existentes
-docker compose exec django python manage.py load_cnpj --competencia 2025-06 --replace
+# Controle Fino (exemplo: pula tabelas secundárias):
+docker compose exec django python manage.py download_cnpj --only-latest --slices 2 --skip-tables socio simples
 ```
 
-### 5. Acesse
+#### Etapa B: Carga no PostgreSQL
 
-| URL | Descrição |
-|-----|-----------|
-| `http://localhost:8000/` | Portal de busca |
-| `http://localhost:8000/busca/` | Busca avançada |
-| `http://localhost:8000/cnpj/<cnpj_basico>/` | Detalhe de empresa |
-| `http://localhost:8000/api/cnpj/<cnpj>/` | API REST (JSON) |
-| `http://localhost:8080/` | Adminer (PostgreSQL) |
-| `http://localhost:8000/admin/` | Django Admin |
-
-## Estrutura do Projeto
-
-```
-mihos/
-├── cnpj_portal/           # Projeto Django
-│   ├── settings.py        # Configurações (env vars)
-│   └── urls.py
-├── cnpj/                  # App principal
-│   ├── management/commands/
-│   │   ├── download_cnpj.py   # Etapa 1: download
-│   │   └── load_cnpj.py       # Etapa 3: ETL
-│   ├── models.py              # Etapa 2: modelos
-│   ├── views.py               # Etapa 4: interface
-│   └── templates/cnpj/
-│       ├── base.html          # Layout base Bootstrap 5
-│       ├── home.html          # Página inicial
-│       ├── busca.html         # Busca com filtros
-│       └── detalhe.html       # Detalhe + Chart.js
-├── data/raw/              # ZIPs da RF (volume Docker)
-│   └── 2025-06/
-│       ├── Cnaes.zip
-│       ├── Empresas0.zip ... Empresas9.zip
-│       └── ...
-├── logs/                  # Logs de download por competência
-├── Dockerfile
-├── docker-compose.yml
-├── entrypoint.sh
-└── requirements.txt
-```
-
-## Tabelas do Banco
-
-### Domínio (sem histórico)
-| Tabela | Registros aprox. |
-|--------|-----------------|
-| `cnpj_cnae` | ~1.300 |
-| `cnpj_municipio` | ~5.570 |
-| `cnpj_pais` | ~260 |
-| `cnpj_natureza` | ~90 |
-| `cnpj_qualificacao` | ~70 |
-| `cnpj_motivo` | ~60 |
-
-### Principais (com campo `competencia`)
-| Tabela | Registros por competência |
-|--------|--------------------------|
-| `cnpj_empresa` | ~60 milhões |
-| `cnpj_estabelecimento` | ~60 milhões |
-| `cnpj_socio` | ~25 milhões |
-| `cnpj_simples` | ~18 milhões |
-
-## Funcionalidades
-
-### Download (`download_cnpj`)
-- ✅ Retry com backoff exponencial (3 tentativas)
-- ✅ Skip de arquivos já baixados
-- ✅ Barras de progresso por arquivo e competência
-- ✅ Log de erros por competência em `./logs/`
-- ✅ `--only-latest` para baixar só a mais recente
-
-### ETL (`load_cnpj`)
-- ✅ Extração ZIP em memória (sem escrever no disco)
-- ✅ Leitura em chunks de 100.000 linhas (pandas)
-- ✅ Layout oficial da RF aplicado automaticamente
-- ✅ Parse de datas YYYYMMDD com tratamento de datas inválidas
-- ✅ Mascaramento de CPF de sócios (`***456789**`)
-- ✅ Normalização de strings (strip, upper, vazio→None)
-- ✅ Carga via `COPY` (psycopg2) — máxima performance
-- ✅ Registro de logs em `CargaLog`
-- ✅ `--replace` para recarregar competência existente
-
-### Interface
-- ✅ Busca com 10 filtros (CNPJ, razão social, CNAE, município, UF, situação, porte, Simples, MEI)
-- ✅ Paginação 25/página com contador de resultados e tempo de resposta
-- ✅ Detalhe com tabs: Empresa, Estabelecimento, Sócios, Simples, Histórico
-- ✅ Gráfico de evolução histórica da situação cadastral (Chart.js)
-- ✅ Comparativo entre competências disponíveis
-- ✅ API REST JSON em `/api/cnpj/<cnpj>/`
-- ✅ Design dark premium com Bootstrap 5
-
-## Variáveis de Ambiente
-
-| Variável | Padrão | Descrição |
-|----------|--------|-----------|
-| `POSTGRES_DB` | `cnpj` | Nome do banco |
-| `POSTGRES_USER` | `cnpj` | Usuário do banco |
-| `POSTGRES_PASSWORD` | `cnpj123` | Senha do banco |
-| `DJANGO_SECRET_KEY` | `dev-key` | Chave secreta Django |
-| `DJANGO_DEBUG` | `False` | Modo debug |
-| `DJANGO_ALLOWED_HOSTS` | `localhost,127.0.0.1` | Hosts permitidos |
-
-## Comandos úteis
+Converte de ZIP via streaming e insere paralelamente no banco via protocolo veloz (`COPY`).
 
 ```bash
-# Verificar logs de carga
+# Atalho --lite: carrega apenas as primeiras fatias e ignora as pesadas tabelas de Simples Nacional
+docker compose exec django python manage.py load_cnpj --competencia 2026-02 --lite --replace
+
+# Carga COMPLETA (todas as competências e fatias). Ajuste os --workers de acordo com sua CPU (teste com nproc):
+docker compose exec django python manage.py load_cnpj --all --workers 8
+```
+*Dica:* Ao rodar `load_cnpj`, o terminal exibirá instruções para acompanhar o **arquivo de log detalhado em tempo real** nos hosts.
+
+#### Etapa C: Indexação Rápida no Elasticsearch
+
+Por fim, povoe o índice textual para que a busca funcione instantaneamente. O comando lê do Postgres em blocos com baixo consumo de memória (RAM) enviando *Bulks* ao serviço do Elastic.
+
+```bash
+# Cria o índice ES e popula com os dados (Funciona 100% igual no modo lite)
+docker compose exec django python manage.py index_es --competencia 2026-02 --create-index
+
+# Apenas reindexar futuramente:
+docker compose exec django python manage.py index_es --competencia 2026-02 --replace
+```
+*Dica:* Siga os logs sugeridos pelo terminal (`tail -f`) ou verifique as contagens finais: `curl -s http://localhost:9200/cnpj_estabelecimentos/_count`.
+
+<details>
+<summary><b>👀 Estimativa de Economia do Modo Lite</b></summary>
+<br>
+
+| Modo | ZIPs baixados | Registros (~) | Espaço DB |
+|------|:---:|:---:|:---:|
+| Completo | 33 | ~163 M | ~80–100 GB |
+| `--slices 1` | 9 | ~16 M | ~8–10 GB |
+| `--lite` (Atalho param.)| 9 | ~14 M | ~7–9 GB |
+| `--slices 1 --skip-tables simples socio` | 8 | ~6 M | ~3–4 GB |
+
+O parâmetro `--slices N` indica que apenas os X primeiros arquivos de cada tabela volumétrica foram extraídos (Empresas, Estab., Sócios). Tabelas cruciais de domínio (CNAE, Municípios) são trazidas com integridade total.
+</details>
+
+### 3. Acessando a Solução
+
+Após carga concluída, seu Portal CNPJ está funcional. Acesse:
+
+| Serviço / Página | URL de Acesso |
+|------------------|---------------|
+| **Portal de Busca (Home)** | `http://localhost:8000/` |
+| **Busca Avançada Flexível**| `http://localhost:8000/busca/` |
+| **Detalhe de Perfil CNPJ** | `http://localhost:8000/cnpj/<cnpj_basico>/` |
+| **Endpoints REST Publicos**| `http://localhost:8000/api/cnpj/<cnpj>/` |
+| Painel do Servidor Django  | `http://localhost:8000/admin/` |
+| Adminer DB Client (Postgres)| `http://localhost:8081/` |
+| Status Health Elasticsearch| `http://localhost:9200/_cluster/health` |
+
+---
+
+## ⚙️ Variáveis de Ambiente (`.env`)
+
+| Variável | Valor Padrão | Descrição |
+|----------|--------------|-----------|
+| `POSTGRES_DB` | `cnpj` | Nome do banco de dados |
+| `POSTGRES_USER` | `cnpj` | Usuário de autenticação PostgreSQL |
+| `POSTGRES_PASSWORD` | `cnpj123` | Senha padronizada de ambiente |
+| `DJANGO_SECRET_KEY` | `dev-key` | Chave criptográfica Django |
+| `DJANGO_DEBUG` | `False` | Alterar p/ `True` durante manutenção |
+| `DJANGO_ALLOWED_HOSTS` | `localhost,127.0.0.1` | Segurança de *headers* web |
+| `ES_URL` | `http://elasticsearch:9200` | URL do Elasticsearch para conexão interna |
+| `CNPJ_ES_INDEX` | `cnpj_estabelecimentos` | Nome do *index* gerenciado pelo Elastic |
+
+---
+
+## 📚 Visão Interna: Tabelas do Banco de Dados
+
+### Tabelas Padrão de Domínio (Lista Estática Censitária)
+Tabelas indexadas de forma permanente (sem coluna de período de competência):
+
+| Tabela Referência | O que Armazena | Num de Registros Aprox. |
+|-------------------|----------------|-------------------------|
+| `cnpj_cnae` | Atividades econômicas descritivas | ~1.300 |
+| `cnpj_municipio` | Relação de siglas (RFB) e capitais | ~5.570 |
+| `cnpj_pais` | Países/Nacionalidades | ~260 |
+| `cnpj_natureza` | Natureza Jurídica formalizada | ~90 |
+| `cnpj_qualificacao` | Qualificação societária (Ex: Presidente, Diretor) | ~70 |
+| `cnpj_motivo` | Situações Censitárias Especiais | ~60 |
+
+### Tabelas Mapeadas por Competência Mensal
+Para o volume esmagador da Receita, guardamos isolamento mês a mês para auditoria temporal (`YYYY-MM`).
+
+| Tabela Base | Descrição Funcional | Volumes por Carga Full |
+|-------------|---------------------|------------------------|
+| `cnpj_empresa` | Raiz Organizacional | ~60 milhões |
+| `cnpj_estabelecimento`| Filiais Físicas (CNPJ 14 dígitos) | ~60 milhões |
+| `cnpj_socio` | Relação quadro de pessoas / QSA | ~25 milhões |
+| `cnpj_simples` | Assinatura Optantes do Simples / MEI | ~18 milhões |
+
+---
+
+## 💡 Comandos e Dicas de Operação
+
+Verificar a quantidade limite de CPUs livres na sua máquina host local (útil para calibrar contagem de `--workers N` nos ETLs de processamento):
+```bash
+docker compose exec django nproc
+```
+
+Para verificar progressos de Cargas ETL logados internamente no banco de dados, inspecione as estatísticas via Shell interativo Django:
+```bash
 docker compose exec django python manage.py shell -c \
-  "from cnpj.models import CargaLog; [print(l) for l in CargaLog.objects.all()[:10]]"
+  "from cnpj.models import CargaLog; [print(l.arquivo, l.status, l.qtd_registros) for l in CargaLog.objects.all()[:10]]"
+```
 
-# Contar registros por competência
+Validação do banco relacional - conte os volumes gigantes com agregação do Django:
+```bash
 docker compose exec django python manage.py shell -c \
-  "from cnpj.models import Empresa; print(Empresa.objects.values('competencia').annotate(n=__import__('django.db.models',fromlist=['Count']).Count('id')))"
+  "from cnpj.models import Empresa; from django.db.models import Count; print(list(Empresa.objects.values('competencia').annotate(n=Count('id'))))"
+```
 
-# Parar e remover tudo (preserva volume pgdata)
+Paradas seguras, mantendo as migrações e toda a carga massiva de disco preservada através dos *Named Volumes* do *Compose*:
+```bash
 docker compose down
-
-# Remover volume com dados (CUIDADO!)
-docker compose down -v
 ```
+*(Atenção: Apenas adicione `-v` ali se realmente desejar o destrutivo "purge" perdendo os dados.)*
 
-## Licença
+---
 
-Dados públicos fornecidos pela Receita Federal do Brasil.  
-Código sob licença MIT.
+> Dados públicos de licença aberta fornecidos com base documental pela **Receita Federal do Brasil**.  
+> Arquitetura e código de software sob licença **MIT**, livre e reutilizável por qualquer fim comercial.

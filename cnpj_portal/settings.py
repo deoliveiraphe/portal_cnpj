@@ -1,7 +1,9 @@
 """
 Configurações do portal de consulta CNPJ da Receita Federal.
 """
+
 from pathlib import Path
+
 from decouple import config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -19,6 +21,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "django.contrib.postgres",
     "corsheaders",
+    "django_elasticsearch_dsl",
     "cnpj",
 ]
 
@@ -58,9 +61,12 @@ _db_url = config(
     "DATABASE_URL",
     default="postgres://cnpj:cnpj123@localhost:5432/cnpj",
 )
+
+
 # Parse manual de postgres://user:pass@host:port/dbname
 def _parse_db_url(url: str) -> dict:
     from urllib.parse import urlparse
+
     r = urlparse(url)
     return {
         "ENGINE": "django.db.backends.postgresql",
@@ -71,6 +77,7 @@ def _parse_db_url(url: str) -> dict:
         "PORT": r.port or 5432,
         "OPTIONS": {"connect_timeout": 10},
     }
+
 
 DATABASES = {"default": _parse_db_url(_db_url)}
 
@@ -108,4 +115,12 @@ CORS_ALLOWED_ORIGINS = config(
 ).split(",")
 CORS_ALLOW_ALL_ORIGINS = config("CORS_ALLOW_ALL_ORIGINS", default=False, cast=bool)
 
-
+# ── Elasticsearch ───────────────────────────────────────────────────────────
+_es_url = config("ES_URL", default="http://elasticsearch:9200")
+ELASTICSEARCH_DSL = {
+    "default": {
+        "hosts": _es_url,
+    }
+}
+# Nome do índice principal
+CNPJ_ES_INDEX = config("CNPJ_ES_INDEX", default="cnpj_estabelecimentos")

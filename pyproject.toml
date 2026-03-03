@@ -1,0 +1,28 @@
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = [
+    ".git",
+    "__pycache__",
+    "migrations",
+    ".venv",
+    "venv",
+    "env",
+    "test_err.py",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = ["E501"]  # Deixa o line-length do ruff format cuidar dos limites, mas não acusa erro rígido no linter
+
+[tool.isort]
+profile = "black"
+line_length = 100
+skip_glob = ["**/migrations/*", "venv/*", "env/*", ".venv/*"]

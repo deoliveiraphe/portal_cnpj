@@ -1,7 +1,17 @@
 from django.contrib import admin
+
 from cnpj.models import (
-    Cnae, Municipio, Pais, Natureza, Qualificacao, Motivo,
-    Empresa, Estabelecimento, Socio, Simples, CargaLog,
+    CargaLog,
+    Cnae,
+    Empresa,
+    Estabelecimento,
+    Motivo,
+    Municipio,
+    Natureza,
+    Pais,
+    Qualificacao,
+    Simples,
+    Socio,
 )
 
 
@@ -48,14 +58,27 @@ class EmpresaAdmin(admin.ModelAdmin):
 
 @admin.register(Estabelecimento)
 class EstabelecimentoAdmin(admin.ModelAdmin):
-    list_display = ["cnpj_basico", "cnpj_ordem", "nome_fantasia", "situacao_cadastral", "uf", "competencia"]
+    list_display = [
+        "cnpj_basico",
+        "cnpj_ordem",
+        "nome_fantasia",
+        "situacao_cadastral",
+        "uf",
+        "competencia",
+    ]
     list_filter = ["competencia", "situacao_cadastral", "uf"]
     search_fields = ["cnpj_basico", "nome_fantasia"]
 
 
 @admin.register(Socio)
 class SocioAdmin(admin.ModelAdmin):
-    list_display = ["cnpj_basico", "nome_socio", "identificador_socio", "qualificacao_socio", "competencia"]
+    list_display = [
+        "cnpj_basico",
+        "nome_socio",
+        "identificador_socio",
+        "qualificacao_socio",
+        "competencia",
+    ]
     list_filter = ["competencia"]
     search_fields = ["cnpj_basico", "nome_socio"]
 

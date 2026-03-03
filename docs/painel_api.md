@@ -2,6 +2,12 @@
 
 A plataforma não precisa de SSR (Server-Side Rendering) tradicional recarregando todas as listagens ou de pacotes front-end monolíticos. O Frontend Vue/React ou Mobile App (desacoplado) requisita dados em formato JSON pelas Views do Django, otimizando o tamanho das *Payloads*.
 
+## Documentação Interativa (Swagger / Redoc)
+
+> [!TIP]
+> A API agora possui uma interface completa de documentação visual baseada na especificação OpenAPI 3.0. Em vez de ler este documento estático, **acesse a UI Interativa** rodando o projeto e visitando:
+> 👉 `http://localhost:8000/api/docs/`
+
 ## Endpoints Públicos disponíveis
 
 ### `1. GET /api/stats/`
@@ -21,7 +27,7 @@ Estatísticas gerais da plataforma para uso na renderização de dashbards da p�
 Recupera uma lista cronológica contendo apenas meses (YYYY-MM) que sofreram cargas totais com logs indicando `SUCESSO` e podem ser servidas sem falhas aos usuários no filtro temporal.
 
 ### `3. GET /api/busca/`
-Principal Endpoint de listagem rápida e cruza resultados da base relacional limitados pelo parâmetro da paginação. Dispensa tabelas Elasticsearch baseando-se em avaliações dinâmicas de Chaves de texto ou Subqueries no banco (EX: "Razão social" busca dentro de CNPJ Base em paralelo de forma transparente sem locks).
+Principal Endpoint de listagem rápida e cruzamentos robustos. Atua de forma **híbrida**, endereçando a palavra chave texto no **Elasticsearch** (Razão Social/Fantasia/CNPJ base) p/ Fuzzy Search tolerante a erros e mesclando em microssegundos com os filtros rigorosos do PostgreSQL indexados.
 
 * **Query Params Suportados (via querystring)**:
     - `q` (Livre/CNPJ/NomeFantasia/RazãoSocial).

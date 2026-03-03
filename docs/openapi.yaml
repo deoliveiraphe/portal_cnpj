@@ -1,0 +1,107 @@
+openapi: 3.0.3
+info:
+  title: Portal CNPJ API
+  description: "API de Consulta de Dados de Empresas Nacionais (Receita Federal). Oferece endpoints de alto desempenho utilizando Elasticsearch para texto livre (fuzzy matching) e PostgreSQL para cruzamentos relacionais de Socios, Simples, Matrizes e Filiais."
+  version: "1.0.0"
+  contact:
+    name: Desenvolvedor (Portfólio)
+servers:
+  - url: http://localhost:8000
+    description: Servidor Local (Desenvolvimento)
+tags:
+  - name: Estatisticas
+    description: Dashboards e contadores do ecossistema CNPJ
+  - name: Empresas e CNPJ
+    description: Busca textual, filtros robustos e perfis completos
+paths:
+  /api/stats/:
+    get:
+      tags:
+        - Estatisticas
+      summary: Retorna estatísticas macro da Plataforma
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_empresas:
+                    type: integer
+                    example: 60450123
+                  total_competencias:
+                    type: integer
+                    example: 2
+                  ultima_competencia:
+                    type: string
+                    example: "2026-02"
+
+  /api/competencias/:
+    get:
+      tags:
+        - Estatisticas
+      summary: Lista das janelas de dados temporais importadas (Ano-mês)
+      responses:
+        "200":
+          description: OK
+
+  /api/busca/:
+    get:
+      tags:
+        - Empresas e CNPJ
+      summary: Super Busca (Elasticsearch)
+      description: Permite fazer matches textuais poderosos contra a Razão Social ou cruzar dezenas de filtros como cidade, atividade, porte em milionésimos de segundo.
+      parameters:
+        - name: q
+          in: query
+          description: "Pesquisa por Nome, Fantasia ou CNPJ (ex: PETROBRAS)"
+          required: false
+          schema:
+            type: string
+        - name: uf
+          in: query
+          description: "Sigla do Estado (ex: SP, MG, RJ)"
+          required: false
+          schema:
+            type: string
+        - name: situacao
+          in: query
+          description: "Status Cadastral: 02 (Ativa), 04 (Inapta), 08 (Baixada)"
+          required: false
+          schema:
+            type: string
+        - name: simples
+          in: query
+          description: "'S' para optantes do Simples Nacional"
+          required: false
+          schema:
+            type: string
+        - name: p
+          in: query
+          description: "Página (Padrão: 1). Exibe 25 resultados por vez."
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Resultados de Empresas retornados com Hits e métricas
+
+  /api/cnpj/{cnpj_basico}/:
+    get:
+      tags:
+        - Empresas e CNPJ
+      summary: Informações Estruturadas da Empresa
+      description: Retorna o JSON com detalhes da raiz corporativa (Porte, Natureza) mesclados com a árvore de **Estabelecimentos**, **Quadro de Sócios (QSA)**, opção do **Simples/MEI** e Timeline temporal.
+      parameters:
+        - name: cnpj_basico
+          in: path
+          description: "Matriz do CNPJ contendo os 8 algarismos base (ex: 33000167)"
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Detalhamento corporativo Full
+        "404":
+          description: CNPJ Base não entrado nas bases de dados
